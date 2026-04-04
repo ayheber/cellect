@@ -10,6 +10,8 @@ env/
 web/node_modules/
 web/dist/
 web/.DS_Store
+web/.env
+web/.env.local
 
 # OS
 .DS_Store
