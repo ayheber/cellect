@@ -3,7 +3,7 @@ import { CellState, Op, Solution } from '../engine/types'
 import { PuzzleData, generatePuzzle } from '../engine/generator'
 import { getDailyPuzzle } from '../engine/daily'
 import { applyOp } from '../engine/operations'
-import { alreadySubmitted, loadSavedCells } from '../engine/leaderboard'
+import { alreadySubmitted, loadSavedCells, saveCells } from '../engine/leaderboard'
 import {
   solvePuzzle,
   minSteps,
@@ -113,6 +113,15 @@ export function useGame(initialPuzzle: PuzzleData) {
     }
     return true
   }, [puzzle, rowResults, colResults])
+
+  // Auto-save daily puzzle state when solved (enables grid restore on reload)
+  useEffect(() => {
+    if (isSolved && isDaily(puzzle)) {
+      saveCells(cellStatesRef.current)
+      const elapsed = Math.round((Date.now() - startTimeRef.current) / 1000)
+      localStorage.setItem(`cellect_daily_elapsed_${puzzle.seed}`, String(elapsed))
+    }
+  }, [isSolved, puzzle])
 
   // Fire analytics exactly once when puzzle is solved
   useEffect(() => {

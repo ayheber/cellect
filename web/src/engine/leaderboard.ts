@@ -33,7 +33,6 @@ export function saveCells(cells: CellState[][]): void {
 }
 
 export function loadSavedCells(): CellState[][] | null {
-  if (!alreadySubmitted()) return null
   const raw = localStorage.getItem(cellsKey())
   if (!raw) return null
   try {

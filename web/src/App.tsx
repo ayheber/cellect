@@ -7,7 +7,6 @@ import { Grid } from './components/Grid'
 import { Controls } from './components/Controls'
 import { WinBanner } from './components/WinBanner'
 import { Op } from './engine/types'
-import { alreadySubmitted } from './engine/leaderboard'
 
 const initialPuzzle = getDailyPuzzle()
 
@@ -21,18 +20,19 @@ function isDailyPuzzle(seed: number): boolean {
 
 export default function App() {
   const game = useGame(initialPuzzle)
-  // Restore elapsed time from localStorage if already submitted today
+  // Restore elapsed from localStorage (saved by useGame when solved)
   const [solveElapsed, setSolveElapsed] = useState(() => {
-    const key = `cellect_daily_elapsed`
-    return alreadySubmitted() ? parseInt(localStorage.getItem(key) ?? '0', 10) : 0
+    const key = `cellect_daily_elapsed_${initialPuzzle.seed}`
+    const saved = localStorage.getItem(key)
+    return saved ? parseInt(saved, 10) : 0
   })
 
-  // Capture elapsed time at the moment of solving
+  // Keep solveElapsed in sync when puzzle is solved in this session
   useEffect(() => {
-    if (game.isSolved) {
-      const elapsed = Math.round((Date.now() - game.startTime) / 1000)
-      setSolveElapsed(elapsed)
-      localStorage.setItem('cellect_daily_elapsed', String(elapsed))
+    if (game.isSolved && solveElapsed === 0) {
+      const key = `cellect_daily_elapsed_${game.puzzle.seed}`
+      const saved = localStorage.getItem(key)
+      if (saved) setSolveElapsed(parseInt(saved, 10))
     }
   }, [game.isSolved])
 
@@ -58,7 +58,6 @@ export default function App() {
           minSteps={game.minStepsCount ?? game.steps}
           elapsed={solveElapsed}
           isDaily={isDailyPuzzle(game.puzzle.seed)}
-          cellStates={game.cellStates}
           onNewGame={handlePlayAgain}
         />
       )}
