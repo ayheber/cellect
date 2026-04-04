@@ -79,8 +79,8 @@ export function Header({ game }: HeaderProps) {
             <div className={styles.section}>
               <div className={styles.sectionTitle}>Controls</div>
               <ul>
-                <li><strong>Left click</strong> — select / deselect</li>
-                <li><strong>Right click</strong> — disable (cross out, free)</li>
+                <li><strong>Tap / left click</strong> — select / deselect</li>
+                <li><strong>Long press / right click</strong> — disable (cross out, free)</li>
                 <li><strong>Hint +2</strong> — reveals one correct cell (costs 2 steps)</li>
                 <li><strong>Reset</strong> — clears the board, keeps your step count</li>
               </ul>
