@@ -187,11 +187,9 @@ export function useGame(initialPuzzle: PuzzleData) {
     })
   }, [])
 
-  /** Reset all cell states and step counter. */
+  /** Reset all cell states. Steps keep accumulating — resets are not free. */
   const reset = useCallback(() => {
     setCellStates(makeCellStates(puzzle.n))
-    setSteps(0)
-    startTimeRef.current = Date.now()
     solvedFiredRef.current = false
   }, [puzzle.n])
 
@@ -219,7 +217,7 @@ export function useGame(initialPuzzle: PuzzleData) {
             next[r][c] = 'selected'
             return next
           })
-          setSteps(s => s + 1)
+          setSteps(s => s + 2)
           return
         }
       }
