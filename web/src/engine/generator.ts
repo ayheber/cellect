@@ -33,8 +33,8 @@ export function generatePuzzle(
 ): PuzzleData {
   const rng = new RNG(seed)
 
-  const minVal = negative ? -15 : 1
-  const maxVal = 15
+  const minVal = negative ? -9 : 1
+  const maxVal = 9
 
   // Fill grid with random integers
   const grid: number[][] = Array.from({ length: n }, () =>

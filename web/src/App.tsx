@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import confetti from 'canvas-confetti'
 import './App.css'
 import { getDailyPuzzle } from './engine/daily'
 import { useGame } from './hooks/useGame'
@@ -18,16 +19,26 @@ function isDailyPuzzle(seed: number): boolean {
   return seed === parseInt(`${y}${m}${d}`, 10)
 }
 
+function fireConfetti(perfect: boolean) {
+  if (perfect) {
+    // Gold burst for perfect score
+    confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 }, colors: ['#FFD700', '#FFA500', '#fff'] })
+    setTimeout(() => confetti({ particleCount: 80, spread: 90, origin: { y: 0.5 }, colors: ['#FFD700', '#FFA500'] }), 300)
+  } else {
+    confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } })
+  }
+}
+
 export default function App() {
   const game = useGame(initialPuzzle)
-  // Restore elapsed from localStorage (saved by useGame when solved)
+  const confettiFiredRef = useRef(false)
+
   const [solveElapsed, setSolveElapsed] = useState(() => {
     const key = `cellect_daily_elapsed_${initialPuzzle.seed}`
     const saved = localStorage.getItem(key)
     return saved ? parseInt(saved, 10) : 0
   })
 
-  // Keep solveElapsed in sync when puzzle is solved in this session
   useEffect(() => {
     if (game.isSolved && solveElapsed === 0) {
       const key = `cellect_daily_elapsed_${game.puzzle.seed}`
@@ -35,6 +46,18 @@ export default function App() {
       if (saved) setSolveElapsed(parseInt(saved, 10))
     }
   }, [game.isSolved])
+
+  // Fire confetti once when puzzle is solved in this session (not on reload)
+  useEffect(() => {
+    if (game.isSolved && !confettiFiredRef.current) {
+      confettiFiredRef.current = true
+      const isPerfect = game.steps === (game.minStepsCount ?? game.steps)
+      fireConfetti(isPerfect)
+    }
+    if (!game.isSolved) {
+      confettiFiredRef.current = false
+    }
+  }, [game.isSolved, game.steps, game.minStepsCount])
 
   function handleNewGame(op: Op, n: number, hiddenOp: boolean, negative: boolean) {
     const seed = Math.floor(Math.random() * 1_000_000_000)
