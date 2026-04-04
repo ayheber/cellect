@@ -1,16 +1,3 @@
-# GitHub Pages Deployment
-#
-# SETUP REQUIRED:
-# 1. Go to your repository Settings → Pages
-# 2. Under "Source", select "Deploy from a branch"
-# 3. Select branch: "gh-pages", folder: "/ (root)"
-# 4. Click Save
-#
-# After the first successful deploy, your app will be available at:
-# https://<your-username>.github.io/cellect/
-#
-# Also make sure the base in vite.config.ts matches your repo name.
-
 name: Deploy to GitHub Pages
 
 on:
@@ -19,18 +6,21 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -44,9 +34,17 @@ jobs:
         working-directory: web
         run: npm run build
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: web/dist
-          publish_branch: gh-pages
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
