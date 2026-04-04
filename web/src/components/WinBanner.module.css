@@ -1,0 +1,124 @@
+.banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 20px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+  border: 2px solid #c8e6c9;
+  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.2);
+  text-align: center;
+  animation: slideIn 0.4s ease-out;
+}
+
+.bannerPerfect {
+  background: linear-gradient(135deg, #fff8e1 0%, #fffde7 100%);
+  border-color: #ffcc02;
+  box-shadow: 0 4px 16px rgba(255, 193, 7, 0.3);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.trophy {
+  font-size: 3rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #2e7d32;
+}
+
+.bannerPerfect .title {
+  color: #f57f17;
+}
+
+.message {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #555;
+}
+
+.statsRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.statValue {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #2e7d32;
+  line-height: 1;
+}
+
+.bannerPerfect .statValue {
+  color: #f57f17;
+}
+
+.statLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+}
+
+.statDivider {
+  font-size: 1.8rem;
+  font-weight: 300;
+  color: #ccc;
+  margin-top: -4px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #777;
+  font-style: italic;
+  max-width: 280px;
+}
+
+.playAgainBtn {
+  margin-top: 6px;
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 2px solid #388E3C;
+  background: #4CAF50;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.35);
+  transition: background-color 0.15s, transform 0.1s;
+  min-height: 44px;
+}
+
+.playAgainBtn:hover {
+  background: #43A047;
+}
+
+.playAgainBtn:active {
+  transform: scale(0.97);
+}

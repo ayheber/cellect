@@ -1,0 +1,116 @@
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 0 6px;
+  width: 100%;
+}
+
+.title {
+  font-size: clamp(1.3rem, 5vw, 1.8rem);
+  font-weight: 800;
+  color: #2e7d32;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: clamp(0.75rem, 3vw, 0.9rem);
+  color: #666;
+  font-style: italic;
+  margin: 0;
+  text-align: center;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.opBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: clamp(0.75rem, 2.5vw, 0.9rem);
+  font-weight: 700;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1.5px solid #c8e6c9;
+}
+
+.opBadgeHidden {
+  background: #fff3e0;
+  color: #e65100;
+  border-color: #ffe0b2;
+}
+
+.diffBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 20px;
+  font-size: clamp(0.68rem, 2vw, 0.8rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.diffEasy {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1.5px solid #c8e6c9;
+}
+
+.diffMedium {
+  background: #fff8e1;
+  color: #f57f17;
+  border: 1.5px solid #ffe082;
+}
+
+.diffHard {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1.5px solid #ffcc02;
+}
+
+.diffExpert {
+  background: #fce4ec;
+  color: #880e4f;
+  border: 1.5px solid #f48fb1;
+}
+
+.stepsCounter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+  color: #555;
+  font-weight: 600;
+}
+
+.stepsNumber {
+  font-size: clamp(0.9rem, 3vw, 1.05rem);
+  font-weight: 800;
+  color: #333;
+}
+
+.dailyBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: clamp(0.65rem, 2vw, 0.75rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 1.5px solid #90caf9;
+}

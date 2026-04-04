@@ -1,0 +1,66 @@
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--cell);
+  height: var(--cell);
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 8px;
+  font-size: clamp(0.75rem, calc(var(--cell) * 0.27), 1.1rem);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  border: 2px solid transparent;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.neutral {
+  background-color: #ffffff;
+  color: #333333;
+  border-color: #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.neutral:hover {
+  background-color: #f0f7f0;
+  border-color: #4CAF50;
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(76, 175, 80, 0.25);
+}
+
+.neutral:active {
+  transform: scale(0.97);
+}
+
+.selected {
+  background-color: #4CAF50;
+  color: #ffffff;
+  border-color: #388E3C;
+  box-shadow: 0 2px 6px rgba(76, 175, 80, 0.4);
+  cursor: pointer;
+}
+
+.selected:hover {
+  background-color: #43A047;
+  transform: scale(1.03);
+}
+
+.selected:active {
+  transform: scale(0.97);
+}
+
+.disabled {
+  background-color: #eeeeee;
+  color: #aaaaaa;
+  text-decoration: line-through;
+  border-color: #e0e0e0;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.disabled:hover {
+  background-color: #e5e5e5;
+}

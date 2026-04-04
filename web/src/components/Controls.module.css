@@ -1,0 +1,291 @@
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.buttonRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: background-color 0.15s, transform 0.1s, box-shadow 0.15s;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.btn:active {
+  transform: scale(0.96);
+}
+
+.btnPrimary {
+  background: #4CAF50;
+  color: #fff;
+  border-color: #388E3C;
+  box-shadow: 0 2px 6px rgba(76, 175, 80, 0.3);
+  width: 100%;
+}
+
+.btnPrimary:hover {
+  background: #43A047;
+  box-shadow: 0 3px 8px rgba(76, 175, 80, 0.4);
+}
+
+.btnSecondary {
+  background: #fff;
+  color: #333;
+  border-color: #ccc;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btnSecondary:hover {
+  background: #f5f5f5;
+  border-color: #aaa;
+}
+
+.btnDanger {
+  background: #fff;
+  color: #c62828;
+  border-color: #f44336;
+}
+
+.btnDanger:hover {
+  background: #ffebee;
+}
+
+.btnHint {
+  background: #fff8e1;
+  color: #f57f17;
+  border-color: #ffb300;
+}
+
+.btnHint:hover {
+  background: #fff3cd;
+}
+
+.btnGuess {
+  background: #fff;
+  color: #333;
+  border-color: #bbb;
+  font-size: 1.1rem;
+  min-width: 52px;
+  padding: 8px 12px;
+}
+
+.btnGuess:hover {
+  background: #f0f0f0;
+  border-color: #888;
+}
+
+.btnDaily {
+  background: #e3f2fd;
+  color: #1565c0;
+  border-color: #90caf9;
+}
+
+.btnDaily:hover {
+  background: #bbdefb;
+}
+
+/* ---- Guess section ---- */
+
+.guessSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #fff8e1;
+  border-radius: 10px;
+  border: 2px solid #ffe082;
+}
+
+.guessLabel {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f57f17;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.guessFeedback {
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.guessFeedbackCorrect {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.guessFeedbackWrong {
+  background: #ffebee;
+  color: #c62828;
+}
+
+/* ---- Solution panel ---- */
+
+.solutionPanel {
+  padding: 12px 16px;
+  background: #e8f5e9;
+  border-radius: 10px;
+  border: 2px solid #c8e6c9;
+  font-size: 0.85rem;
+  color: #2e7d32;
+  line-height: 1.6;
+}
+
+.solutionTitle {
+  font-weight: 800;
+  margin-bottom: 4px;
+  font-size: 0.9rem;
+}
+
+.solutionRow {
+  font-family: monospace;
+}
+
+/* ---- New Game modal ---- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px 20px;
+  width: min(92vw, 380px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
+}
+
+.modalTitle {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #333;
+  text-align: center;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fieldLabel {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Op picker — wraps naturally (4 + 1 on most screens) */
+.opGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.opBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 0;
+  width: 62px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 2px solid #ddd;
+  background: #fafafa;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.opBtn:hover {
+  background: #f0f0f0;
+  border-color: #bbb;
+}
+
+.opBtnActive {
+  background: #e8f5e9;
+  border-color: #4CAF50;
+}
+
+.opSymbol {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #333;
+  line-height: 1;
+}
+
+/* Size picker */
+.sizeRow {
+  display: flex;
+  gap: 6px;
+}
+
+.sizeBtn {
+  flex: 1;
+  padding: 10px 4px;
+  border-radius: 10px;
+  border: 2px solid #ddd;
+  background: #fafafa;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #333;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.sizeBtn:hover {
+  background: #f0f0f0;
+  border-color: #bbb;
+}
+
+.sizeBtnActive {
+  background: #e8f5e9;
+  border-color: #4CAF50;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+}
+
+.checkbox input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #4CAF50;
+}
