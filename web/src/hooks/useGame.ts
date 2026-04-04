@@ -40,7 +40,13 @@ export function useGame(initialPuzzle: PuzzleData) {
     }
     return makeCellStates(initialPuzzle.n)
   })
-  const [steps, setSteps] = useState(0)
+  const [steps, setSteps] = useState(() => {
+    if (isDaily(initialPuzzle)) {
+      const saved = localStorage.getItem(`cellect_daily_steps_${initialPuzzle.seed}`)
+      if (saved) return parseInt(saved, 10)
+    }
+    return 0
+  })
   const [opRevealed, setOpRevealed] = useState(!initialPuzzle.hiddenOp)
 
   // Ref to read cellStates synchronously (avoids stale closure in callbacks)
@@ -113,6 +119,13 @@ export function useGame(initialPuzzle: PuzzleData) {
     }
     return true
   }, [puzzle, rowResults, colResults])
+
+  // Auto-save steps for daily puzzle
+  useEffect(() => {
+    if (isDaily(puzzle)) {
+      localStorage.setItem(`cellect_daily_steps_${puzzle.seed}`, String(steps))
+    }
+  }, [steps, puzzle])
 
   // Auto-save daily puzzle cell states on every change (restores progress on reload)
   useEffect(() => {
