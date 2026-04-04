@@ -3,6 +3,7 @@ import { CellState, Op, Solution } from '../engine/types'
 import { PuzzleData, generatePuzzle } from '../engine/generator'
 import { getDailyPuzzle } from '../engine/daily'
 import { applyOp } from '../engine/operations'
+import { alreadySubmitted, loadSavedCells } from '../engine/leaderboard'
 import {
   solvePuzzle,
   minSteps,
@@ -32,9 +33,13 @@ function isDaily(puzzle: PuzzleData): boolean {
 
 export function useGame(initialPuzzle: PuzzleData) {
   const [puzzle, setPuzzle] = useState<PuzzleData>(initialPuzzle)
-  const [cellStates, setCellStates] = useState<CellState[][]>(() =>
-    makeCellStates(initialPuzzle.n),
-  )
+  const [cellStates, setCellStates] = useState<CellState[][]>(() => {
+    if (isDaily(initialPuzzle)) {
+      const saved = loadSavedCells()
+      if (saved) return saved
+    }
+    return makeCellStates(initialPuzzle.n)
+  })
   const [steps, setSteps] = useState(0)
   const [opRevealed, setOpRevealed] = useState(!initialPuzzle.hiddenOp)
 
@@ -43,7 +48,8 @@ export function useGame(initialPuzzle: PuzzleData) {
   cellStatesRef.current = cellStates
 
   const startTimeRef = useRef<number>(Date.now())
-  const solvedFiredRef = useRef(false)
+  // If already submitted today, mark solved as already fired to skip re-tracking
+  const solvedFiredRef = useRef(isDaily(initialPuzzle) && alreadySubmitted())
 
   // Track game start whenever puzzle changes
   useEffect(() => {

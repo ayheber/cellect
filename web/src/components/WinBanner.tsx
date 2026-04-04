@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import styles from './WinBanner.module.css'
-import { submitScore, getTopScores, alreadySubmitted, LeaderboardEntry } from '../engine/leaderboard'
+import { submitScore, saveCells, getTopScores, alreadySubmitted, LeaderboardEntry } from '../engine/leaderboard'
+import { CellState } from '../engine/types'
 
 interface WinBannerProps {
   steps: number
   minSteps: number
   elapsed: number   // seconds
   isDaily: boolean
+  cellStates: CellState[][]
   onNewGame: () => void
 }
 
@@ -16,7 +18,7 @@ function formatTime(seconds: number): string {
   return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`
 }
 
-export function WinBanner({ steps, minSteps, elapsed, isDaily, onNewGame }: WinBannerProps) {
+export function WinBanner({ steps, minSteps, elapsed, isDaily, cellStates, onNewGame }: WinBannerProps) {
   const isPerfect = steps === minSteps
 
   const [name, setName] = useState(() => localStorage.getItem('cellect_player_name') ?? '')
@@ -39,6 +41,7 @@ export function WinBanner({ steps, minSteps, elapsed, isDaily, onNewGame }: WinB
     if (!trimmed) return
     setSubmitting(true)
     localStorage.setItem('cellect_player_name', trimmed)
+    saveCells(cellStates)
     await submitScore(trimmed, steps, elapsed)
     setSubmitted(true)
     setSubmitting(false)

@@ -1,5 +1,6 @@
 import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
+import { CellState } from './types'
 
 export interface LeaderboardEntry {
   name: string
@@ -19,8 +20,27 @@ function storageKey(): string {
   return `cellect_daily_${dateKey()}_submitted`
 }
 
+function cellsKey(): string {
+  return `cellect_daily_${dateKey()}_cells`
+}
+
 export function alreadySubmitted(): boolean {
   return localStorage.getItem(storageKey()) === 'true'
+}
+
+export function saveCells(cells: CellState[][]): void {
+  localStorage.setItem(cellsKey(), JSON.stringify(cells))
+}
+
+export function loadSavedCells(): CellState[][] | null {
+  if (!alreadySubmitted()) return null
+  const raw = localStorage.getItem(cellsKey())
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as CellState[][]
+  } catch {
+    return null
+  }
 }
 
 export async function submitScore(name: string, steps: number, time: number): Promise<void> {
