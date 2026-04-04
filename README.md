@@ -15,7 +15,16 @@ steps = better score.
 - Every column must have ≥ 2 selected cells whose result matches the column target.
 - Operations apply left-to-right (rows) and top-to-bottom (columns).
 - Selecting a cell costs 1 step. Disabling (crossing out) a cell is free.
+- Hint reveals one correct cell at a cost of 2 steps.
 - Minimum steps across all valid solutions = perfect score.
+
+### Controls
+
+| Action | Desktop | Mobile |
+|---|---|---|
+| Select / deselect a cell | Left click | Tap |
+| Disable a cell (free) | Right click | Long press (500 ms) |
+| Keyboard shortcut | `Enter` / `Space` to select, `D` to disable | — |
 
 ### Supported operations
 
