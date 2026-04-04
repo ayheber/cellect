@@ -7,6 +7,118 @@
   width: 100%;
 }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.helpBtn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #c8e6c9;
+  background: #e8f5e9;
+  color: #2e7d32;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.helpBtn:hover {
+  background: #c8e6c9;
+}
+
+/* ---- Help modal ---- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px 20px;
+  width: min(92vw, 400px);
+  max-height: 85vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
+}
+
+.modalTitle {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #333;
+  text-align: center;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sectionTitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+}
+
+.section p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #444;
+  line-height: 1.5;
+}
+
+.section ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.section li {
+  font-size: 0.88rem;
+  color: #444;
+  line-height: 1.5;
+}
+
+.closeBtn {
+  margin-top: 4px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 2px solid #388E3C;
+  background: #4CAF50;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.closeBtn:hover {
+  background: #43A047;
+}
+
 .title {
   font-size: clamp(1.3rem, 5vw, 1.8rem);
   font-weight: 800;
