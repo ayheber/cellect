@@ -114,10 +114,16 @@ export function useGame(initialPuzzle: PuzzleData) {
     return true
   }, [puzzle, rowResults, colResults])
 
-  // Auto-save daily puzzle state when solved (enables grid restore on reload)
+  // Auto-save daily puzzle cell states on every change (restores progress on reload)
+  useEffect(() => {
+    if (isDaily(puzzle)) {
+      saveCells(cellStates)
+    }
+  }, [cellStates, puzzle])
+
+  // Save elapsed time when daily puzzle is solved
   useEffect(() => {
     if (isSolved && isDaily(puzzle)) {
-      saveCells(cellStatesRef.current)
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 1000)
       localStorage.setItem(`cellect_daily_elapsed_${puzzle.seed}`, String(elapsed))
     }
