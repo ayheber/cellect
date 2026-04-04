@@ -70,8 +70,8 @@ export function Controls({ game, onNewGame }: ControlsProps) {
 
         {!showGuessSection && !isSolved && (
           <>
-            <button className={`${styles.btn} ${styles.btnHint}`} onClick={applyHint}>
-              Hint
+            <button className={`${styles.btn} ${styles.btnHint}`} onClick={applyHint} title="Reveals one correct cell (+2 steps)">
+              Hint +2
             </button>
             <button
               className={`${styles.btn} ${styles.btnSecondary}`}
