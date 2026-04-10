@@ -3,7 +3,7 @@ import { GameState, GameStatus, Query, MatchQuality, Warehouse, ExtraWarehouse }
 import {
   WH_SIZES, SQL_SNIPPETS, BASE_SPEED, FAST_DROP_SPEED, SPEED_INC, QUERIES_PER_LEVEL,
   WH_QUERY_COST, BASELINE_COST, COMBO_BONUS,
-  LANE_W, NUM_LANES, QUERY_START_Y, QUERY_LAND_Y, BOARD_W,
+  LANE_W, NUM_LANES, QUERY_START_Y, QUERY_LAND_Y, BOARD_W, WH_ZONE_Y,
   MAX_QUEUE, STARTING_CREDITS, PROCESS_TIME, PROCESS_LEVEL_INC, CREDIT_COST, WH_WEIGHTS,
 } from '../game/constants';
 import { render } from '../game/renderer';
@@ -151,11 +151,20 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       const now = Date.now();
       const rect = canvas.getBoundingClientRect();
       const tapX = (t.clientX - rect.left) * (canvas.width / rect.width);
+      const tapY = (t.clientY - rect.top) * (canvas.height / rect.height);
+      const inWHZone = tapY >= 10 + WH_ZONE_Y; // 10 = board's top offset
       const onBlock = Math.abs(tapX - (10 + state.playerX)) < 50;
-      if (onBlock && now - lastTapTime < 300) { state.spinupPending = true; }
-      else if (!onBlock && tapX >= 10 && tapX <= 430) {
+      if (onBlock && now - lastTapTime < 300) {
+        state.spinupPending = true; // double-tap on block = spinup
+      } else if (tapX >= 10 && tapX <= 430) {
         const lane = Math.floor((tapX - 10) / LANE_W);
-        if (lane >= 0 && lane < NUM_LANES) state.playerLane = lane;
+        if (lane >= 0 && lane < NUM_LANES) {
+          if (inWHZone && lane === state.playerLane) {
+            state.queryY = QUERY_LAND_Y; // tap own WH = instant drop
+          } else {
+            state.playerLane = lane; // tap other WH or upper area = move there
+          }
+        }
       }
       lastTapTime = now;
     };
@@ -165,9 +174,16 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       if (state.status !== 'playing') return;
       const rect = canvas.getBoundingClientRect();
       const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
       if (x >= 10 && x <= 430) {
         const lane = Math.floor((x - 10) / LANE_W);
-        if (lane >= 0 && lane < NUM_LANES) state.playerLane = lane;
+        if (lane >= 0 && lane < NUM_LANES) {
+          if (y >= 10 + WH_ZONE_Y && lane === state.playerLane) {
+            state.queryY = QUERY_LAND_Y; // click own WH = instant drop
+          } else {
+            state.playerLane = lane;
+          }
+        }
       }
     });
 

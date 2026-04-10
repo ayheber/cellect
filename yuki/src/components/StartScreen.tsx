@@ -31,7 +31,7 @@ export function StartScreen({ onStart }: Props) {
           </div>
           <div className="htp-row">
             <span className="htp-key">↓</span>
-            <span className="htp-desc">Fast drop</span>
+            <span className="htp-desc">Fast drop · or tap your warehouse to drop instantly</span>
           </div>
           <div className="htp-row">
             <span className="htp-key">SPACE</span>

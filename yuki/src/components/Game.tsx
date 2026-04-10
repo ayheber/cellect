@@ -20,7 +20,7 @@ export function Game({ playerName, onGameOver }: Props) {
   return (
     <div className="game-wrapper">
       <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H} className="game-canvas" />
-      <p className="controls-hint">← → move · SPACE = spin up new WH · ↓ = fast drop</p>
+      <p className="controls-hint">← → move · SPACE = spin up new WH · ↓ = fast drop · tap WH = drop there</p>
     </div>
   );
 }
