@@ -1,0 +1,43 @@
+import { useState } from 'react';
+import { StartScreen } from './components/StartScreen';
+import { Game } from './components/Game';
+import { GameOver } from './components/GameOver';
+
+type Screen = 'start' | 'playing' | 'gameover';
+
+export default function App() {
+  const [screen, setScreen] = useState<Screen>('start');
+  const [playerName, setPlayerName] = useState('');
+  const [gameKey, setGameKey] = useState(0);
+  const [finalScore, setFinalScore] = useState(0);
+  const [yukiScore, setYukiScore] = useState(0);
+
+  const handleStart = (name: string, _email: string) => {
+    setPlayerName(name);
+    setGameKey(k => k + 1);
+    setScreen('playing');
+  };
+
+  const handleGameOver = (score: number, yScore: number) => {
+    setFinalScore(score);
+    setYukiScore(yScore);
+    setScreen('gameover');
+  };
+
+  const handleRestart = () => {
+    setGameKey(k => k + 1);
+    setScreen('playing');
+  };
+
+  return (
+    <div className="app">
+      {screen === 'start' && <StartScreen onStart={handleStart} />}
+      {screen === 'playing' && (
+        <Game key={gameKey} playerName={playerName} onGameOver={handleGameOver} />
+      )}
+      {screen === 'gameover' && (
+        <GameOver score={finalScore} yukiScore={yukiScore} playerName={playerName} onRestart={handleRestart} />
+      )}
+    </div>
+  );
+}
