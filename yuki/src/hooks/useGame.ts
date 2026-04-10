@@ -137,7 +137,7 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    let touchStartX = 0, touchStartY = 0, lastTapTime = 0;
+    let touchStartX = 0, touchStartY = 0, lastTapTime = 0, lastTouchEnd = 0;
     const onTouchStart = (e: TouchEvent) => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; };
     const onTouchEnd = (e: TouchEvent) => {
       if (state.status !== 'playing') return;
@@ -167,11 +167,13 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
         }
       }
       lastTapTime = now;
+      lastTouchEnd = now;
     };
     canvas.addEventListener('touchstart', onTouchStart, { passive: true });
     canvas.addEventListener('touchend', onTouchEnd, { passive: true });
     canvas.addEventListener('click', (e: MouseEvent) => {
       if (state.status !== 'playing') return;
+      if (Date.now() - lastTouchEnd < 400) return; // suppress ghost click after touch
       const rect = canvas.getBoundingClientRect();
       const x = (e.clientX - rect.left) * (canvas.width / rect.width);
       const y = (e.clientY - rect.top) * (canvas.height / rect.height);
