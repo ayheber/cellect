@@ -11,6 +11,7 @@ export default function App() {
   const [gameKey, setGameKey] = useState(0);
   const [finalScore, setFinalScore] = useState(0);
   const [yukiScore, setYukiScore] = useState(0);
+  const [isNewBest, setIsNewBest] = useState(false);
 
   const handleStart = (name: string, _email: string) => {
     setPlayerName(name);
@@ -18,9 +19,10 @@ export default function App() {
     setScreen('playing');
   };
 
-  const handleGameOver = (score: number, yScore: number) => {
+  const handleGameOver = (score: number, yScore: number, newBest: boolean) => {
     setFinalScore(score);
     setYukiScore(yScore);
+    setIsNewBest(newBest);
     setScreen('gameover');
   };
 
@@ -36,7 +38,7 @@ export default function App() {
         <Game key={gameKey} playerName={playerName} onGameOver={handleGameOver} />
       )}
       {screen === 'gameover' && (
-        <GameOver score={finalScore} yukiScore={yukiScore} playerName={playerName} onRestart={handleRestart} />
+        <GameOver score={finalScore} yukiScore={yukiScore} playerName={playerName} isNewBest={isNewBest} onRestart={handleRestart} />
       )}
     </div>
   );

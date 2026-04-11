@@ -102,7 +102,9 @@ function drawHeader(
   level: number,
   nextQuery: Query | null,
   _isPenguin: boolean,
-  spinupPending: boolean
+  spinupPending: boolean,
+  yukiScore: number,
+  bestScore: number,
 ) {
   // Player name + spinup indicator (left)
   ctx.fillStyle = spinupPending ? '#67e8f9' : accent;
@@ -161,6 +163,15 @@ function drawHeader(
   ctx.fillStyle = '#334155';
   ctx.font = '8px monospace';
   ctx.fillText(`${board.credits}cr`, 14, 56);
+
+  // Personal best (left) + Yuki ghost score (right) — tiny dim row above divider
+  ctx.font = '8px "Courier New", monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#1e3a5f';
+  ctx.fillText(bestScore > 0 ? `PB $${bestScore.toLocaleString()}` : 'PB ---', 14, 70);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = yukiScore > board.score ? '#3a1820' : '#1a3020';
+  ctx.fillText(`🐧 $${yukiScore.toLocaleString()}`, BOARD_W - 14, 70);
 
   // Divider
   ctx.strokeStyle = '#0f2040';
@@ -243,6 +254,15 @@ function drawLane(
   const sfAlpha = isFull ? '22' : lane.isExtra ? 'cc' : isHighlighted ? 'aa' : '33';
   drawSnowflake(ctx, x + laneW / 2, WH_ZONE_Y + 106, Math.min(14, laneW * 0.13), color + sfAlpha);
 
+  // Queue danger bar — thin fill on left edge, grows from bottom as queue fills
+  if (lane.queue.length > 0) {
+    const fillRatio = lane.queue.length / MAX_QUEUE;
+    const barH = (WH_ZONE_H - 6) * fillRatio;
+    ctx.globalAlpha = lane.opacity * 0.6;
+    ctx.fillStyle = fillRatio >= 1 ? '#ef4444' : '#fb923c';
+    ctx.fillRect(x + 1, WH_ZONE_Y + WH_ZONE_H - 4 - barH, 3, barH);
+  }
+
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
@@ -303,7 +323,7 @@ function drawWarehouses(
 
 // ─── Ice Cube Query Block ──────────────────────────────────────────────────────
 
-function drawFallingQuery(ctx: CanvasRenderingContext2D, query: Query, x: number, y: number, isYuki: boolean, spinupActive = false) {
+function drawFallingQuery(ctx: CanvasRenderingContext2D, query: Query, x: number, y: number, isYuki: boolean, spinupActive = false, fallProgress = 0) {
   const h = queryH(query.size);
   // Uniform ice color — no color hint about query size
   const iceColor = isYuki ? '#38bdf8' : '#67e8f9';
@@ -347,17 +367,17 @@ function drawFallingQuery(ctx: CanvasRenderingContext2D, query: Query, x: number
     ctx.font = 'bold 12px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('⚡ SPIN UP', x, qy + 14);
-  }
-
-  // Complexity bar (5 segments — don't reveal exact size)
-  const segCount = 5;
-  const segW = (QUERY_W - 14) / segCount;
-  const segH = 6;
-  const segY = qy + h / 2 - segH / 2; // vertically centred in block
-  for (let i = 0; i < segCount; i++) {
-    const sx = x - QUERY_W / 2 + 7 + i * segW;
-    ctx.fillStyle = i <= sizeIdx ? '#67e8f9' : '#1a3a6a';
-    ctx.fillRect(sx, segY, segW - 2, segH);
+  } else {
+    // Complexity bar (5 segments)
+    const segCount = 5;
+    const segW = (QUERY_W - 14) / segCount;
+    const segH = 6;
+    const segY = qy + h / 2 - segH / 2;
+    for (let i = 0; i < segCount; i++) {
+      const sx = x - QUERY_W / 2 + 7 + i * segW;
+      ctx.fillStyle = i <= sizeIdx ? '#67e8f9' : '#1a3a6a';
+      ctx.fillRect(sx, segY, segW - 2, segH);
+    }
   }
 
   ctx.textAlign = 'left';
@@ -588,7 +608,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
     rrect(ctx, 0, 0, BOARD_W, BOARD_H, 10);
     ctx.stroke();
 
-    drawHeader(ctx, board, label, accent, state.level, state.nextQuery, isPenguin, state.spinupPending && !isPenguin);
+    drawHeader(ctx, board, label, accent, state.level, state.nextQuery, isPenguin, state.spinupPending && !isPenguin, state.yuki.score, state.bestScore);
 
     // Lane dividers — based on dynamic lane count
     const dynamicLaneW = BOARD_W / buildLaneList(board.warehouses, board.extraWarehouses).length;
@@ -604,10 +624,28 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
 
     const fallProgress = (state.queryY - QUERY_START_Y) / (QUERY_LAND_Y - QUERY_START_Y);
     const showFullHint = !isPenguin && fallProgress > 0.55;
+
+    // Combo overlay (5+) — drawn behind block for atmosphere
+    if (!isPenguin && board.combo >= 5) {
+      const intensity = Math.min(1, (board.combo - 5) / 10);
+      const pulse = 0.4 + 0.6 * Math.abs(Math.sin(Date.now() / 200));
+      ctx.globalAlpha = (0.10 + intensity * 0.18) * pulse;
+      ctx.fillStyle = '#c084fc';
+      const fontSize = Math.round(48 + intensity * 24);
+      ctx.font = `bold ${fontSize}px "Courier New", monospace`;
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#c084fc';
+      ctx.shadowBlur = 32;
+      ctx.fillText(`${board.combo}×`, BOARD_W / 2, (HEADER_H + WH_ZONE_Y) / 2 + fontSize * 0.36);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
+    }
+
     drawWarehouses(ctx, lane, board.warehouses, board.extraWarehouses, showFullHint, !isPenguin);
 
     if (state.currentQuery) {
-      drawFallingQuery(ctx, state.currentQuery, queryX, state.queryY, isPenguin, !isPenguin && state.spinupPending);
+      drawFallingQuery(ctx, state.currentQuery, queryX, state.queryY, isPenguin, !isPenguin && state.spinupPending, fallProgress);
     }
 
     drawFeedback(ctx, board);
@@ -619,7 +657,24 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
     ? state.playerName.toUpperCase().slice(0, 14)
     : 'PLAYER';
 
+  // Screen shake
+  const shk = state.shakeMagnitude;
+  if (shk > 0) {
+    ctx.save();
+    ctx.translate(
+      (Math.random() - 0.5) * shk * 2.2,
+      (Math.random() - 0.5) * shk,
+    );
+  }
+
   drawBoard(PLAYER_BX, state.player, playerLabel, PLAYER_ACCENT, state.playerX, state.playerLane, false);
+
+  // Red flash overlay on life loss
+  if (shk > 0) {
+    ctx.fillStyle = `rgba(239,68,68,${Math.min(0.22, shk * 0.019)})`;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.restore();
+  }
 
   // Scanlines
   ctx.fillStyle = 'rgba(0,0,0,0.025)';

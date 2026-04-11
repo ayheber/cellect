@@ -64,4 +64,6 @@ export interface GameState {
   speed: number;
   playerName: string;
   spinupPending: boolean;
+  shakeMagnitude: number;  // screen shake, decays to 0 after life loss
+  bestScore: number;       // personal best loaded from localStorage
 }

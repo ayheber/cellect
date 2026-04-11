@@ -82,7 +82,7 @@ export const WH_QUERY_COST: Record<WHSize, number> = {
 // Baseline: what a human does without Yuki — routes everything to M
 export const BASELINE_COST = 60; // $60/query if you always pick M
 
-export const COMBO_BONUS = 0.25;
+export const COMBO_BONUS = 0.4; // each 3-combo adds 40% to savings multiplier
 
 export const SQL_SNIPPETS: Record<WHSize, string[]> = {
   XS: [

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { GameState, GameStatus, Query, MatchQuality, Warehouse, ExtraWarehouse } from '../game/types';
+import { sound } from '../game/sound';
 import {
   WH_SIZES, SQL_SNIPPETS, BASE_SPEED, FAST_DROP_SPEED, SPEED_INC, QUERIES_PER_LEVEL,
   WH_QUERY_COST, BASELINE_COST, COMBO_BONUS,
@@ -87,6 +88,7 @@ function calcSaved(routedLane: number, combo: number): number {
 function makeInitialState(playerName: string): GameState {
   const pool = generatePool(200);
   const first = pool[0];
+  const bestScore = parseInt(localStorage.getItem('yuki-best') || '0', 10);
   return {
     status: 'tutorial',
     player: makeBoard(),
@@ -105,6 +107,8 @@ function makeInitialState(playerName: string): GameState {
     speed: BASE_SPEED,
     playerName,
     spinupPending: false,
+    shakeMagnitude: 0,
+    bestScore,
   };
 }
 
@@ -114,6 +118,7 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
   const [status, setStatus] = useState<GameStatus>('playing');
   const finalScoreRef = useRef(0);
   const yukiScoreRef = useRef(0);
+  const isNewBestRef = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -230,12 +235,15 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
         const saved = calcSaved(optLane, b.combo);
         b.score += saved;
         b.combo++;
+        sound.spinup();
         b.feedback.push({ text: `⚡ New ${q.size} WH added! Saved $${saved}`, x: fx, y: fy, opacity: 1, color: '#67e8f9' });
       } else {
         const wh = b.warehouses[state.playerLane];
         if (wh.queue.length >= MAX_QUEUE) {
           b.lives--;
           b.combo = 0;
+          state.shakeMagnitude = 12;
+          sound.lifeLoss();
           b.feedback.push({ text: '❌ WH FULL! Query LOST  –1 life', x: fx, y: fy, opacity: 1, color: '#f87171', big: true });
           const spinupHint = isTouchDevice ? 'Double-tap block to add a new WH' : 'Press SPACE to add a new WH';
           b.feedback.push({ text: spinupHint, x: fx, y: fy - 36, opacity: 1, color: '#fb923c' });
@@ -249,15 +257,19 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
 
           if (quality === 'perfect') {
             b.combo++;
+            sound.perfect();
+            if (b.combo >= 5 && b.combo % 5 === 0) sound.combo(b.combo);
             b.feedback.push({ text: `❄ PERFECT! Saved $${saved}`, x: fx, y: fy, opacity: 1, color: '#67e8f9' });
           } else if (quality === 'close') {
             b.combo = 0;
+            sound.close();
             const rightWH = WH_SIZES[optimalIdx];
             const dir = state.playerLane > optimalIdx ? 'too big' : 'too small';
             b.feedback.push({ text: `WH ${dir} — use ${rightWH}`, x: fx, y: fy, opacity: 1, color: '#facc15' });
             b.feedback.push({ text: `Saved $${saved}  (−${CREDIT_COST.close}cr wasted)`, x: fx, y: fy - 32, opacity: 1, color: '#facc15' });
           } else {
             b.combo = 0;
+            sound.wrong();
             const rightWH = WH_SIZES[optimalIdx];
             const dir = state.playerLane > optimalIdx ? 'Way too big' : 'Way too small';
             b.feedback.push({ text: `${dir}! Use ${rightWH} WH`, x: fx, y: fy, opacity: 1, color: '#f87171', big: true });
@@ -267,6 +279,8 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
           if (b.credits <= 0) {
             b.lives--;
             b.credits = STARTING_CREDITS;
+            state.shakeMagnitude = 12;
+            sound.lifeLoss();
             b.feedback.push({ text: '💸 Over budget! –1 life', x: fx, y: fy - 74, opacity: 1, color: '#fb923c', big: true });
           }
         }
@@ -351,12 +365,28 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
             .map(fb => ({ ...fb, y: fb.y - 32 * dt, opacity: fb.opacity - (fb.big ? 0.35 : 0.48) * dt }))
             .filter(fb => fb.opacity > 0);
         }
+
+        // Decay screen shake
+        if (state.shakeMagnitude > 0) {
+          state.shakeMagnitude = Math.max(0, state.shakeMagnitude - 60 * dt);
+        }
       }
 
       render(ctx, state);
 
       if (state.status === 'playing' || state.status === 'tutorial') { raf = requestAnimationFrame(loop); }
-      else { finalScoreRef.current = state.player.score; yukiScoreRef.current = state.yuki.score; setStatus(state.status); }
+      else {
+        finalScoreRef.current = state.player.score;
+        yukiScoreRef.current = state.yuki.score;
+        const prev = parseInt(localStorage.getItem('yuki-best') || '0', 10);
+        const isNew = state.player.score > prev;
+        if (isNew) {
+          localStorage.setItem('yuki-best', state.player.score.toString());
+          sound.newBest();
+        }
+        isNewBestRef.current = isNew;
+        setStatus(state.status);
+      }
     };
 
     raf = requestAnimationFrame(loop);
@@ -367,5 +397,5 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
     };
   }, [canvasRef, playerName]);
 
-  return { status, finalScore: finalScoreRef.current, yukiScore: yukiScoreRef.current };
+  return { status, finalScore: finalScoreRef.current, yukiScore: yukiScoreRef.current, isNewBest: isNewBestRef.current };
 }

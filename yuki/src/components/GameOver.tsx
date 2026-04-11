@@ -2,6 +2,7 @@ interface Props {
   score: number;
   yukiScore: number;
   playerName: string;
+  isNewBest: boolean;
   onRestart: () => void;
 }
 
@@ -9,7 +10,7 @@ function fmt(n: number): string {
   return '$' + Math.max(0, n).toLocaleString();
 }
 
-export function GameOver({ score, yukiScore, playerName, onRestart }: Props) {
+export function GameOver({ score, yukiScore, playerName, isNewBest, onRestart }: Props) {
   const gap = yukiScore - score;
   const pct = yukiScore > 0 ? Math.round((yukiScore / Math.max(score, 1)) * 100) : 0;
 
@@ -19,6 +20,7 @@ export function GameOver({ score, yukiScore, playerName, onRestart }: Props) {
         <div className="start-logo">YUKI</div>
         <h1 className="start-title">Game Over</h1>
         <p className="gameover-name">{playerName}</p>
+        {isNewBest && <div className="new-best-banner">🏆 NEW PERSONAL BEST!</div>}
 
         <div className="gameover-scores">
           <div className="gameover-col">

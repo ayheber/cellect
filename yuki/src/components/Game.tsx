@@ -4,7 +4,7 @@ import { CANVAS_W, CANVAS_H } from '../game/constants';
 
 interface Props {
   playerName: string;
-  onGameOver: (score: number, yukiScore: number) => void;
+  onGameOver: (score: number, yukiScore: number, isNewBest: boolean) => void;
 }
 
 const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -15,13 +15,13 @@ const CONTROLS_HINT = isTouch
 
 export function Game({ playerName, onGameOver }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { status, finalScore, yukiScore } = useGame(canvasRef, playerName);
+  const { status, finalScore, yukiScore, isNewBest } = useGame(canvasRef, playerName);
 
   useEffect(() => {
     if (status === 'gameover') {
-      onGameOver(finalScore, yukiScore);
+      onGameOver(finalScore, yukiScore, isNewBest);
     }
-  }, [status, finalScore, yukiScore, onGameOver]);
+  }, [status, finalScore, yukiScore, isNewBest, onGameOver]);
 
   return (
     <div className="game-wrapper">
