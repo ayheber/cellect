@@ -288,15 +288,8 @@ function drawWarehouses(
   const lanes = buildLaneList(warehouses, extraWarehouses);
   const laneW = BOARD_W / lanes.length;
 
-  // Find visual index of highlighted base lane
-  let highlightVisualIdx = -1;
-  let baseCount = 0;
-  for (let i = 0; i < lanes.length; i++) {
-    if (!lanes[i].isExtra) {
-      if (baseCount === playerLane) { highlightVisualIdx = i; break; }
-      baseCount++;
-    }
-  }
+  // playerLane is already a visual index
+  const highlightVisualIdx = Math.min(playerLane, lanes.length - 1);
 
   for (let i = 0; i < lanes.length; i++) {
     drawLane(ctx, lanes[i], i * laneW, laneW, i === highlightVisualIdx);
@@ -304,8 +297,8 @@ function drawWarehouses(
 
   // "FULL → SPACE" hint above full target lane
   if (showFullHint && isPlayer && highlightVisualIdx >= 0) {
-    const targetWH = warehouses[playerLane];
-    if (targetWH && targetWH.queue.length >= MAX_QUEUE) {
+    const targetLane = lanes[highlightVisualIdx];
+    if (targetLane && targetLane.queue.length >= MAX_QUEUE) {
       const hx = highlightVisualIdx * laneW + laneW / 2;
       const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 200);
       ctx.globalAlpha = pulse;

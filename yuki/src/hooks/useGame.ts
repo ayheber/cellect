@@ -136,7 +136,7 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       if (state.status === 'tutorial') { state.status = 'playing'; return; }
       if (state.status !== 'playing') return;
       if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') state.playerLane = Math.max(0, state.playerLane - 1);
-      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.playerLane = Math.min(NUM_LANES - 1, state.playerLane + 1);
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { const lanes = buildLaneList(state.player.warehouses, state.player.extraWarehouses); state.playerLane = Math.min(lanes.length - 1, state.playerLane + 1); }
       if (e.key === ' ')         { e.preventDefault(); state.spinupPending = true; }
       if (e.key === 'ArrowDown') { e.preventDefault(); fastDrop = true; }
     };
@@ -152,7 +152,7 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       const t = e.changedTouches[0];
       const dx = t.clientX - touchStartX, dy = t.clientY - touchStartY;
       if (Math.abs(dx) > 35 && Math.abs(dx) > Math.abs(dy)) {
-        state.playerLane = dx > 0 ? Math.min(NUM_LANES - 1, state.playerLane + 1) : Math.max(0, state.playerLane - 1);
+        { const lanes = buildLaneList(state.player.warehouses, state.player.extraWarehouses); state.playerLane = dx > 0 ? Math.min(lanes.length - 1, state.playerLane + 1) : Math.max(0, state.playerLane - 1); }
         return;
       }
       if (dy > 35 && Math.abs(dy) > Math.abs(dx)) { fastDrop = true; setTimeout(() => { fastDrop = false; }, 600); return; }
@@ -165,8 +165,10 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       if (onBlock && now - lastTapTime < 300) {
         state.spinupPending = true; // double-tap on block = spinup
       } else if (tapX >= PLAYER_BX && tapX <= PLAYER_BX + BOARD_W) {
-        const lane = Math.floor((tapX - PLAYER_BX) / LANE_W);
-        if (lane >= 0 && lane < NUM_LANES) {
+        const lanes = buildLaneList(state.player.warehouses, state.player.extraWarehouses);
+        const dynLaneW = BOARD_W / lanes.length;
+        const lane = Math.floor((tapX - PLAYER_BX) / dynLaneW);
+        if (lane >= 0 && lane < lanes.length) {
           if (inWHZone && lane === state.playerLane) {
             state.queryY = QUERY_LAND_Y; // tap own WH = instant drop
           } else {
@@ -187,8 +189,10 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       const x = (e.clientX - rect.left) * (canvas.width / rect.width);
       const y = (e.clientY - rect.top) * (canvas.height / rect.height);
       if (x >= PLAYER_BX && x <= PLAYER_BX + BOARD_W) {
-        const lane = Math.floor((x - PLAYER_BX) / LANE_W);
-        if (lane >= 0 && lane < NUM_LANES) {
+        const lanes = buildLaneList(state.player.warehouses, state.player.extraWarehouses);
+        const dynLaneW = BOARD_W / lanes.length;
+        const lane = Math.floor((x - PLAYER_BX) / dynLaneW);
+        if (lane >= 0 && lane < lanes.length) {
           if (y >= 10 + WH_ZONE_Y && lane === state.playerLane) {
             state.queryY = QUERY_LAND_Y; // click own WH = instant drop
           } else {
@@ -210,7 +214,9 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       state.currentQuery = state.queryPool[state.queryIndex];
       state.nextQuery = state.queryPool[state.queryIndex + 1] ?? null;
       state.queryY = QUERY_START_Y;
-      state.playerLane = 2;
+      // Clamp playerLane in case an extra WH just disappeared
+      const pLanes = buildLaneList(state.player.warehouses, state.player.extraWarehouses);
+      state.playerLane = Math.min(state.playerLane, pLanes.length - 1);
       state.yukiLane = WH_SIZES.indexOf(state.currentQuery.size);
       state.spinupPending = false;
       fastDrop = false;
@@ -238,8 +244,11 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
         sound.spinup();
         b.feedback.push({ text: `⚡ New ${q.size} WH added! Saved $${saved}`, x: fx, y: fy, opacity: 1, color: '#67e8f9' });
       } else {
-        const wh = b.warehouses[state.playerLane];
-        if (wh.queue.length >= MAX_QUEUE) {
+        const lanes = buildLaneList(b.warehouses, b.extraWarehouses);
+        const visIdx = Math.min(state.playerLane, lanes.length - 1);
+        const selectedLane = lanes[visIdx];
+        const playerSizeIdx = WH_SIZES.indexOf(selectedLane.size as any);
+        if (selectedLane.queue.length >= MAX_QUEUE) {
           b.lives--;
           b.combo = 0;
           state.shakeMagnitude = 12;
@@ -249,11 +258,11 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
           b.feedback.push({ text: spinupHint, x: fx, y: fy - 36, opacity: 1, color: '#fb923c' });
         } else {
           const optimalIdx = WH_SIZES.indexOf(q.size);
-          const quality = getMatchQuality(state.playerLane, q.size);
-          const saved = calcSaved(state.playerLane, b.combo);
+          const quality = getMatchQuality(playerSizeIdx, q.size);
+          const saved = calcSaved(playerSizeIdx, b.combo);
           b.score += saved;
           b.credits = Math.max(0, b.credits - CREDIT_COST[quality]);
-          wh.queue.push({ query: q, progress: 0 });
+          selectedLane.queue.push({ query: q, progress: 0 });
 
           if (quality === 'perfect') {
             b.combo++;
@@ -264,14 +273,14 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
             b.combo = 0;
             sound.close();
             const rightWH = WH_SIZES[optimalIdx];
-            const dir = state.playerLane > optimalIdx ? 'too big' : 'too small';
+            const dir = playerSizeIdx > optimalIdx ? 'too big' : 'too small';
             b.feedback.push({ text: `WH ${dir} — use ${rightWH}`, x: fx, y: fy, opacity: 1, color: '#facc15' });
             b.feedback.push({ text: `Saved $${saved}  (−${CREDIT_COST.close}cr wasted)`, x: fx, y: fy - 32, opacity: 1, color: '#facc15' });
           } else {
             b.combo = 0;
             sound.wrong();
             const rightWH = WH_SIZES[optimalIdx];
-            const dir = state.playerLane > optimalIdx ? 'Way too big' : 'Way too small';
+            const dir = playerSizeIdx > optimalIdx ? 'Way too big' : 'Way too small';
             b.feedback.push({ text: `${dir}! Use ${rightWH} WH`, x: fx, y: fy, opacity: 1, color: '#f87171', big: true });
             b.feedback.push({ text: `Saved $${saved}  (−${CREDIT_COST.poor}cr wasted)`, x: fx, y: fy - 40, opacity: 1, color: '#f87171' });
           }
@@ -345,7 +354,9 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
         // Dynamic lane positions
         const pList = buildLaneList(state.player.warehouses, state.player.extraWarehouses);
         const yList = buildLaneList(state.yuki.warehouses, state.yuki.extraWarehouses);
-        const pTargetX = getBaseLaneX(pList, state.playerLane);
+        state.playerLane = Math.min(state.playerLane, pList.length - 1);
+        const pLaneW = BOARD_W / pList.length;
+        const pTargetX = state.playerLane * pLaneW + pLaneW / 2;
         const yTargetX = getBaseLaneX(yList, state.yukiLane);
         state.playerX = lerp(state.playerX, pTargetX, 1 - Math.exp(-14 * dt));
         state.yukiX   = lerp(state.yukiX,   yTargetX, 1 - Math.exp(-22 * dt));
