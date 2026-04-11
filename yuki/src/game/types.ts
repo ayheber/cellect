@@ -1,6 +1,6 @@
 export type WHSize = 'XS' | 'S' | 'M' | 'L' | 'XL';
 export type MatchQuality = 'perfect' | 'close' | 'poor';
-export type GameStatus = 'start' | 'playing' | 'gameover';
+export type GameStatus = 'start' | 'tutorial' | 'playing' | 'gameover';
 
 export interface Query {
   id: string;

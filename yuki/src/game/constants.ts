@@ -1,24 +1,23 @@
 import { WHSize } from './types';
 
-export const CANVAS_W = 900;
-export const CANVAS_H = 620;
+export const CANVAS_W = 560;
+export const CANVAS_H = 700;
 
-export const BOARD_W = 420;
-export const BOARD_H = 600;
+export const BOARD_W = 540;
+export const BOARD_H = 680;
 
-export const PLAYER_BX = 10;
-export const YUKI_BX = 470;
+export const PLAYER_BX = 10; // single board, left offset
 
 export const NUM_LANES = 5;
-export const LANE_W = BOARD_W / NUM_LANES; // 84
+export const LANE_W = BOARD_W / NUM_LANES; // 108
 
-export const HEADER_H = 65;
-export const WH_ZONE_H = 110;
-export const WH_ZONE_Y = BOARD_H - WH_ZONE_H; // 490
+export const HEADER_H = 72;
+export const WH_ZONE_H = 130;
+export const WH_ZONE_Y = BOARD_H - WH_ZONE_H; // 550
 
-export const QUERY_W = LANE_W - 8; // 76
-export const QUERY_START_Y = HEADER_H + 20; // 85
-export const QUERY_LAND_Y = WH_ZONE_Y - 8; // 482
+export const QUERY_W = LANE_W - 12; // 96
+export const QUERY_START_Y = HEADER_H + 20; // 92
+export const QUERY_LAND_Y = WH_ZONE_Y - 8; // 542
 
 export const WH_SIZES: WHSize[] = ['XS', 'S', 'M', 'L', 'XL'];
 

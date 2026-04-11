@@ -3,7 +3,7 @@ import { GameState, GameStatus, Query, MatchQuality, Warehouse, ExtraWarehouse }
 import {
   WH_SIZES, SQL_SNIPPETS, BASE_SPEED, FAST_DROP_SPEED, SPEED_INC, QUERIES_PER_LEVEL,
   WH_QUERY_COST, BASELINE_COST, COMBO_BONUS,
-  LANE_W, NUM_LANES, QUERY_START_Y, QUERY_LAND_Y, BOARD_W, WH_ZONE_Y,
+  LANE_W, NUM_LANES, QUERY_START_Y, QUERY_LAND_Y, BOARD_W, WH_ZONE_Y, PLAYER_BX,
   MAX_QUEUE, STARTING_CREDITS, PROCESS_TIME, PROCESS_LEVEL_INC, CREDIT_COST, WH_WEIGHTS,
 } from '../game/constants';
 import { render } from '../game/renderer';
@@ -88,7 +88,7 @@ function makeInitialState(playerName: string): GameState {
   const pool = generatePool(200);
   const first = pool[0];
   return {
-    status: 'playing',
+    status: 'tutorial',
     player: makeBoard(),
     yuki: makeBoard(),
     currentQuery: first,
@@ -123,10 +123,12 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
 
     const state = makeInitialState(playerName);
     let fastDrop = false;
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
     // ── Input ─────────────────────────────────────────────────────────────────
 
     const onKeyDown = (e: KeyboardEvent) => {
+      if (state.status === 'tutorial') { state.status = 'playing'; return; }
       if (state.status !== 'playing') return;
       if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') state.playerLane = Math.max(0, state.playerLane - 1);
       if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.playerLane = Math.min(NUM_LANES - 1, state.playerLane + 1);
@@ -140,6 +142,7 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
     let touchStartX = 0, touchStartY = 0, lastTapTime = 0, lastTouchEnd = 0;
     const onTouchStart = (e: TouchEvent) => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; };
     const onTouchEnd = (e: TouchEvent) => {
+      if (state.status === 'tutorial') { state.status = 'playing'; return; }
       if (state.status !== 'playing') return;
       const t = e.changedTouches[0];
       const dx = t.clientX - touchStartX, dy = t.clientY - touchStartY;
@@ -153,11 +156,11 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       const tapX = (t.clientX - rect.left) * (canvas.width / rect.width);
       const tapY = (t.clientY - rect.top) * (canvas.height / rect.height);
       const inWHZone = tapY >= 10 + WH_ZONE_Y; // 10 = board's top offset
-      const onBlock = Math.abs(tapX - (10 + state.playerX)) < 50;
+      const onBlock = Math.abs(tapX - (PLAYER_BX + state.playerX)) < 50;
       if (onBlock && now - lastTapTime < 300) {
         state.spinupPending = true; // double-tap on block = spinup
-      } else if (tapX >= 10 && tapX <= 430) {
-        const lane = Math.floor((tapX - 10) / LANE_W);
+      } else if (tapX >= PLAYER_BX && tapX <= PLAYER_BX + BOARD_W) {
+        const lane = Math.floor((tapX - PLAYER_BX) / LANE_W);
         if (lane >= 0 && lane < NUM_LANES) {
           if (inWHZone && lane === state.playerLane) {
             state.queryY = QUERY_LAND_Y; // tap own WH = instant drop
@@ -172,13 +175,14 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
     canvas.addEventListener('touchstart', onTouchStart, { passive: true });
     canvas.addEventListener('touchend', onTouchEnd, { passive: true });
     canvas.addEventListener('click', (e: MouseEvent) => {
+      if (state.status === 'tutorial') { state.status = 'playing'; return; }
       if (state.status !== 'playing') return;
       if (Date.now() - lastTouchEnd < 400) return; // suppress ghost click after touch
       const rect = canvas.getBoundingClientRect();
       const x = (e.clientX - rect.left) * (canvas.width / rect.width);
       const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-      if (x >= 10 && x <= 430) {
-        const lane = Math.floor((x - 10) / LANE_W);
+      if (x >= PLAYER_BX && x <= PLAYER_BX + BOARD_W) {
+        const lane = Math.floor((x - PLAYER_BX) / LANE_W);
         if (lane >= 0 && lane < NUM_LANES) {
           if (y >= 10 + WH_ZONE_Y && lane === state.playerLane) {
             state.queryY = QUERY_LAND_Y; // click own WH = instant drop
@@ -216,6 +220,8 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
     function scorePlayer(): boolean {
       const q = state.currentQuery!;
       const b = state.player;
+      const fx = state.playerX;
+      const fy = state.queryY - 20;
 
       if (state.spinupPending && b.credits >= CREDIT_COST.spinup) {
         spawnExtra(q.size, q, b.extraWarehouses);
@@ -224,34 +230,44 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
         const saved = calcSaved(optLane, b.combo);
         b.score += saved;
         b.combo++;
-        b.feedback.push({ text: `⚡ NEW WH  +$${saved}`, x: state.playerX, y: state.queryY - 20, opacity: 1, color: '#67e8f9' });
+        b.feedback.push({ text: `⚡ New ${q.size} WH added! Saved $${saved}`, x: fx, y: fy, opacity: 1, color: '#67e8f9' });
       } else {
         const wh = b.warehouses[state.playerLane];
         if (wh.queue.length >= MAX_QUEUE) {
           b.lives--;
           b.combo = 0;
-          b.feedback.push({ text: '❌ WH FULL!', x: state.playerX, y: state.queryY - 20, opacity: 1, color: '#f87171', big: true });
+          b.feedback.push({ text: '❌ WH FULL! Query LOST  –1 life', x: fx, y: fy, opacity: 1, color: '#f87171', big: true });
+          const spinupHint = isTouchDevice ? 'Double-tap block to add a new WH' : 'Press SPACE to add a new WH';
+          b.feedback.push({ text: spinupHint, x: fx, y: fy - 36, opacity: 1, color: '#fb923c' });
         } else {
+          const optimalIdx = WH_SIZES.indexOf(q.size);
           const quality = getMatchQuality(state.playerLane, q.size);
           const saved = calcSaved(state.playerLane, b.combo);
           b.score += saved;
           b.credits = Math.max(0, b.credits - CREDIT_COST[quality]);
           wh.queue.push({ query: q, progress: 0 });
-          const sign = saved >= 0 ? `+$${saved}` : `-$${Math.abs(saved)}`;
+
           if (quality === 'perfect') {
             b.combo++;
-            b.feedback.push({ text: `❄ ${sign} PERFECT`, x: state.playerX, y: state.queryY - 20, opacity: 1, color: '#67e8f9' });
+            b.feedback.push({ text: `❄ PERFECT! Saved $${saved}`, x: fx, y: fy, opacity: 1, color: '#67e8f9' });
           } else if (quality === 'close') {
             b.combo = 0;
-            b.feedback.push({ text: `${sign} close`, x: state.playerX, y: state.queryY - 20, opacity: 1, color: '#facc15' });
+            const rightWH = WH_SIZES[optimalIdx];
+            const dir = state.playerLane > optimalIdx ? 'too big' : 'too small';
+            b.feedback.push({ text: `WH ${dir} — use ${rightWH}`, x: fx, y: fy, opacity: 1, color: '#facc15' });
+            b.feedback.push({ text: `Saved $${saved}  (−${CREDIT_COST.close}cr wasted)`, x: fx, y: fy - 32, opacity: 1, color: '#facc15' });
           } else {
             b.combo = 0;
-            b.feedback.push({ text: `🧊 ${sign} wrong WH`, x: state.playerX, y: state.queryY - 20, opacity: 1, color: '#f87171' });
+            const rightWH = WH_SIZES[optimalIdx];
+            const dir = state.playerLane > optimalIdx ? 'Way too big' : 'Way too small';
+            b.feedback.push({ text: `${dir}! Use ${rightWH} WH`, x: fx, y: fy, opacity: 1, color: '#f87171', big: true });
+            b.feedback.push({ text: `Saved $${saved}  (−${CREDIT_COST.poor}cr wasted)`, x: fx, y: fy - 40, opacity: 1, color: '#f87171' });
           }
+
           if (b.credits <= 0) {
             b.lives--;
             b.credits = STARTING_CREDITS;
-            b.feedback.push({ text: '💸 BUDGET OUT!', x: state.playerX, y: state.queryY - 50, opacity: 1, color: '#fb923c', big: true });
+            b.feedback.push({ text: '💸 Over budget! –1 life', x: fx, y: fy - 74, opacity: 1, color: '#fb923c', big: true });
           }
         }
       }
@@ -332,14 +348,14 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
 
         for (const board of [state.player, state.yuki]) {
           board.feedback = board.feedback
-            .map(fb => ({ ...fb, y: fb.y - 55 * dt, opacity: fb.opacity - (fb.big ? 0.7 : 1.8) * dt }))
+            .map(fb => ({ ...fb, y: fb.y - 32 * dt, opacity: fb.opacity - (fb.big ? 0.35 : 0.48) * dt }))
             .filter(fb => fb.opacity > 0);
         }
       }
 
       render(ctx, state);
 
-      if (state.status === 'playing') { raf = requestAnimationFrame(loop); }
+      if (state.status === 'playing' || state.status === 'tutorial') { raf = requestAnimationFrame(loop); }
       else { finalScoreRef.current = state.player.score; yukiScoreRef.current = state.yuki.score; setStatus(state.status); }
     };
 

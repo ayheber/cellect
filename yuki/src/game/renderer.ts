@@ -1,13 +1,13 @@
 import {
   BOARD_W, BOARD_H, HEADER_H, WH_ZONE_H, WH_ZONE_Y,
-  QUERY_W, WH_SIZES, WH_COLORS, WH_BG, PLAYER_BX, YUKI_BX, CANVAS_W, CANVAS_H,
+  QUERY_W, WH_SIZES, WH_COLORS, WH_BG, PLAYER_BX, CANVAS_W, CANVAS_H,
   MAX_QUEUE, STARTING_CREDITS, QUERY_START_Y, QUERY_LAND_Y,
 } from './constants';
 import { BoardScore, ExtraWarehouse, GameState, Query, Warehouse, WHSize } from './types';
 import { buildLaneList, LaneEntry } from '../hooks/useGame';
 
 const PLAYER_ACCENT = '#a78bfa';
-const YUKI_ACCENT  = '#67e8f9';
+const IS_TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
 // ─── Snow particles ────────────────────────────────────────────────────────────
 
@@ -101,75 +101,66 @@ function drawHeader(
   accent: string,
   level: number,
   nextQuery: Query | null,
-  isPenguin: boolean,
+  _isPenguin: boolean,
   spinupPending: boolean
 ) {
-  // Label
-  if (isPenguin) {
-    ctx.font = '20px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('🐧', 10, 28);
-    ctx.fillStyle = accent;
-    ctx.font = 'bold 15px "Courier New", monospace';
-    ctx.fillText(label, 38, 26);
-  } else {
-    ctx.fillStyle = spinupPending ? '#67e8f9' : accent;
-    ctx.font = 'bold 17px "Courier New", monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(label + (spinupPending ? ' ⚡' : ''), 12, 26);
-  }
+  // Player name + spinup indicator (left)
+  ctx.fillStyle = spinupPending ? '#67e8f9' : accent;
+  ctx.font = 'bold 17px "Courier New", monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(label + (spinupPending ? ' ⚡' : ''), 14, 24);
 
-  // Savings
+  // SAVED label + amount (left, below name)
   ctx.fillStyle = '#334155';
   ctx.font = '8px monospace';
-  ctx.textAlign = 'left';
-  ctx.fillText('SAVED', isPenguin ? 38 : 12, 38);
+  ctx.fillText('SAVED', 14, 37);
   const savedStr = '$' + Math.max(0, board.score).toLocaleString();
   ctx.fillStyle = board.score > 0 ? '#67e8f9' : '#f87171';
-  ctx.font = `bold 14px "Courier New", monospace`;
-  ctx.fillText(savedStr, isPenguin ? 38 : 12, 52);
+  ctx.font = 'bold 15px "Courier New", monospace';
+  ctx.fillText(savedStr, 14, 52);
 
-  // Lives (ice cubes)
+  // Lives (ice cubes) — centered
   for (let i = 0; i < 3; i++) {
-    ctx.fillStyle = i < board.lives ? '#60a5fa' : '#1e293b';
-    ctx.font = '14px sans-serif';
+    ctx.font = '15px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('🧊', BOARD_W / 2 - 14 + i * 22, 28);
+    ctx.globalAlpha = i < board.lives ? 1 : 0.2;
+    ctx.fillText('🧊', BOARD_W / 2 - 20 + i * 24, 26);
   }
+  ctx.globalAlpha = 1;
 
-  // Combo
+  // Combo — centered, below lives
   if (board.combo >= 3) {
     ctx.fillStyle = '#c084fc';
-    ctx.font = 'bold 10px monospace';
+    ctx.font = 'bold 11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(`${board.combo}× COMBO`, BOARD_W / 2, 46);
+    ctx.fillText(`${board.combo}× COMBO`, BOARD_W / 2, 45);
   }
 
-  // Level + Next
-  ctx.fillStyle = '#334155';
-  ctx.font = '10px monospace';
+  // Level + Next query (right)
   ctx.textAlign = 'right';
-  ctx.fillText(`LVL ${level}`, BOARD_W - 10, 22);
+  ctx.fillStyle = '#475569';
+  ctx.font = '10px monospace';
+  ctx.fillText(`LVL ${level}`, BOARD_W - 14, 22);
   if (nextQuery) {
-    ctx.fillStyle = '#1e293b';
+    ctx.fillStyle = '#334155';
     ctx.font = '8px monospace';
-    ctx.fillText('NEXT', BOARD_W - 10, 36);
+    ctx.fillText('NEXT', BOARD_W - 14, 35);
     ctx.fillStyle = WH_COLORS[nextQuery.size];
-    ctx.font = 'bold 11px monospace';
-    ctx.fillText(`❄ ${nextQuery.size}`, BOARD_W - 10, 48);
+    ctx.font = 'bold 12px "Courier New", monospace';
+    ctx.fillText(`❄ ${nextQuery.size}`, BOARD_W - 14, 49);
   }
   ctx.textAlign = 'left';
 
-  // Credits bar
+  // Credits bar (full width, near bottom of header)
   const credRatio = board.credits / STARTING_CREDITS;
-  const barW = BOARD_W - 24;
+  const barW = BOARD_W - 28;
   ctx.fillStyle = '#0a1628';
-  ctx.fillRect(12, 54, barW, 5);
+  ctx.fillRect(14, 57, barW, 6);
   ctx.fillStyle = credRatio > 0.5 ? '#22d3ee' : credRatio > 0.2 ? '#fb923c' : '#ef4444';
-  ctx.fillRect(12, 54, barW * credRatio, 5);
-  ctx.fillStyle = '#1e3a5f';
+  ctx.fillRect(14, 57, barW * credRatio, 6);
+  ctx.fillStyle = '#334155';
   ctx.font = '8px monospace';
-  ctx.fillText(`${board.credits}cr`, 12, 53);
+  ctx.fillText(`${board.credits}cr`, 14, 56);
 
   // Divider
   ctx.strokeStyle = '#0f2040';
@@ -224,12 +215,12 @@ function drawLane(
     ctx.fillText('FULL', x + laneW / 2, WH_ZONE_Y + 31);
   }
 
-  // Queue slots
-  const slotW = laneW - 12;
-  const slotH = 10;
-  const slotX = x + 6;
+  // Queue slots — taller with more readable text
+  const slotW = laneW - 14;
+  const slotH = 16;
+  const slotX = x + 7;
   for (let s = 0; s < MAX_QUEUE; s++) {
-    const sy = WH_ZONE_Y + 38 + s * 13;
+    const sy = WH_ZONE_Y + 40 + s * 22;
     const pq = lane.queue[s];
     ctx.fillStyle = '#0a1628';
     ctx.fillRect(slotX, sy, slotW, slotH);
@@ -239,17 +230,18 @@ function drawLane(
       ctx.fillStyle = qc + '88';
       ctx.fillRect(slotX, sy, fillW, slotH);
       ctx.fillStyle = qc;
-      ctx.font = '7px monospace';
-      ctx.fillText(pq.query.size, slotX + slotW / 2, sy + 8);
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(pq.query.size, slotX + slotW / 2, sy + 11);
     }
-    ctx.strokeStyle = pq ? WH_COLORS[pq.query.size as WHSize] + '44' : '#0f2040';
+    ctx.strokeStyle = pq ? WH_COLORS[pq.query.size as WHSize] + '55' : '#0f2040';
     ctx.lineWidth = 1;
     ctx.strokeRect(slotX, sy, slotW, slotH);
   }
 
   // Snowflake
   const sfAlpha = isFull ? '22' : lane.isExtra ? 'cc' : isHighlighted ? 'aa' : '33';
-  drawSnowflake(ctx, x + laneW / 2, WH_ZONE_Y + 82, Math.min(11, laneW * 0.13), color + sfAlpha);
+  drawSnowflake(ctx, x + laneW / 2, WH_ZONE_Y + 106, Math.min(14, laneW * 0.13), color + sfAlpha);
 
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
@@ -302,7 +294,7 @@ function drawWarehouses(
       ctx.fillStyle = '#ef4444';
       ctx.fillText('WH FULL!', hx, WH_ZONE_Y - 12);
       ctx.fillStyle = '#67e8f9';
-      ctx.fillText('SPACE / 2× tap', hx, WH_ZONE_Y - 2);
+      ctx.fillText(IS_TOUCH ? '2× tap block' : 'SPACE to add WH', hx, WH_ZONE_Y - 2);
       ctx.globalAlpha = 1;
       ctx.textAlign = 'left';
     }
@@ -377,17 +369,165 @@ function drawFeedback(ctx: CanvasRenderingContext2D, board: BoardScore) {
   for (const fb of board.feedback) {
     ctx.globalAlpha = Math.max(0, fb.opacity);
     ctx.fillStyle = fb.color;
-    ctx.font = fb.big ? 'bold 22px sans-serif' : 'bold 15px sans-serif';
+    ctx.font = fb.big ? 'bold 24px sans-serif' : 'bold 17px "Courier New", monospace';
     ctx.textAlign = 'center';
     if (fb.big) {
       ctx.shadowColor = fb.color;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 14;
+    } else {
+      // Subtle drop-shadow for readability over the dark play field
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 6;
     }
     ctx.fillText(fb.text, fb.x, fb.y);
     ctx.shadowBlur = 0;
   }
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
+}
+
+// ─── Tutorial screen ──────────────────────────────────────────────────────────
+
+function drawTutorial(ctx: CanvasRenderingContext2D, playerName: string) {
+  const cx = CANVAS_W / 2;
+  const CLR  = ['#4ade80', '#a3e635', '#facc15', '#fb923c', '#f87171'];
+  const BKG  = ['#052e16', '#1a2e05', '#1c1002', '#1c0a02', '#1c0202'];
+  const SIZES = ['XS', 'S', 'M', 'L', 'XL'];
+
+  const div = (y: number) => {
+    ctx.strokeStyle = '#0f2a4a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(36, y);
+    ctx.lineTo(CANVAS_W - 36, y);
+    ctx.stroke();
+  };
+
+  const sec = (text: string, y: number) => {
+    ctx.fillStyle = '#1e4a6a';
+    ctx.font = 'bold 9px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(text, 36, y);
+  };
+
+  // Title
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#67e8f9';
+  ctx.font = 'bold 28px "Courier New", monospace';
+  ctx.shadowColor = '#67e8f9';
+  ctx.shadowBlur = 18;
+  ctx.fillText('❄  QUERY DROP', cx, 52);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#334155';
+  ctx.font = '13px "Courier New", monospace';
+  const greeting = playerName ? `Route queries · save the most $  ·  good luck, ${playerName}!` : 'Route queries to the right warehouse · save the most $';
+  ctx.fillText(greeting, cx, 76);
+
+  div(92);
+
+  // ── Complexity bar
+  sec('COMPLEXITY BAR  →  SIZE OF WAREHOUSE NEEDED', 110);
+  const colW = (CANVAS_W - 72) / 5;
+  for (let i = 0; i < 5; i++) {
+    const bx = 36 + i * colW + colW / 2;
+    const segW = 11, segGap = 3, totalW = 5 * segW + 4 * segGap;
+    const sx = bx - totalW / 2;
+    for (let s = 0; s < 5; s++) {
+      ctx.fillStyle = s <= i ? CLR[i] : '#1a3a6a';
+      ctx.fillRect(sx + s * (segW + segGap), 124, segW, 9);
+    }
+    ctx.fillStyle = CLR[i];
+    ctx.font = 'bold 12px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(SIZES[i], bx, 152);
+  }
+
+  div(165);
+
+  // ── WH size badges
+  sec('MATCH QUERY TO THE RIGHT WAREHOUSE SIZE', 183);
+  const badgeW = Math.floor((CANVAS_W - 72 - 16) / 5);
+  for (let i = 0; i < 5; i++) {
+    const bx = 36 + i * (badgeW + 4);
+    rrect(ctx, bx, 193, badgeW, 30, 6);
+    ctx.fillStyle = BKG[i];
+    ctx.fill();
+    ctx.strokeStyle = CLR[i] + '88';
+    ctx.lineWidth = 1.5;
+    rrect(ctx, bx, 193, badgeW, 30, 6);
+    ctx.stroke();
+    ctx.fillStyle = CLR[i];
+    ctx.font = 'bold 13px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`❄ ${SIZES[i]}`, bx + badgeW / 2, 213);
+  }
+
+  div(239);
+
+  // ── Controls
+  sec('CONTROLS', 257);
+  const ctrlRows: [string, string][] = IS_TOUCH ? [
+    ['Swipe ← →',   'Move between warehouses'],
+    ['Swipe ↓',     'Fast drop'],
+    ['Tap WH',      'Instant drop to that warehouse'],
+    ['2× tap block','Spin up new WH  (costs 25cr)'],
+  ] : [
+    ['← →',         'Move between warehouses'],
+    ['↓',           'Fast drop'],
+    ['Click WH',    'Instant drop to that warehouse'],
+    ['SPACE',       'Spin up new WH  (costs 25cr)'],
+  ];
+  for (let i = 0; i < ctrlRows.length; i++) {
+    const y = 273 + i * 22;
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 12px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(ctrlRows[i][0], 36, y);
+    ctx.fillStyle = '#475569';
+    ctx.font = '12px "Courier New", monospace';
+    ctx.fillText(ctrlRows[i][1], 160, y);
+  }
+
+  div(361);
+
+  // ── Scoring
+  sec('SCORING', 379);
+  const scoreRows: [string, string, string][] = [
+    ['❄ Perfect match',          'Saved $45 · combo grows',    '#67e8f9'],
+    ['⚠ Off by 1 size',          'Less savings · −18cr budget','#facc15'],
+    ['✗ Wrong WH',               'No savings  · −40cr budget', '#f87171'],
+    ['❌ WH full / budget out',  '−1 life  (3 lives total)',    '#f87171'],
+  ];
+  for (let i = 0; i < scoreRows.length; i++) {
+    const y = 395 + i * 22;
+    ctx.fillStyle = scoreRows[i][2];
+    ctx.font = 'bold 12px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(scoreRows[i][0], 36, y);
+    ctx.fillStyle = '#475569';
+    ctx.font = '12px "Courier New", monospace';
+    ctx.fillText(scoreRows[i][1], 282, y);
+  }
+
+  div(483);
+
+  // Tip
+  ctx.fillStyle = '#1e3a5f';
+  ctx.font = '12px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('Spin up a WH when it\'s full — that\'s what Yuki does automatically, 24/7.', cx, 505);
+
+  // ── Pulsing CTA
+  const pulse = 0.65 + 0.35 * Math.sin(Date.now() / 480);
+  ctx.globalAlpha = pulse;
+  ctx.fillStyle = '#67e8f9';
+  ctx.font = 'bold 18px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = '#67e8f9';
+  ctx.shadowBlur = 14;
+  ctx.fillText(IS_TOUCH ? '▶  Tap anywhere to start' : '▶  Click or press any key to start', cx, 644);
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
 }
 
 // ─── Main render ──────────────────────────────────────────────────────────────
@@ -411,6 +551,14 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillRect(0, 0, CANVAS_W, 180);
 
   drawParticles(ctx);
+
+  if (state.status === 'tutorial') {
+    drawTutorial(ctx, state.playerName);
+    // Scanlines
+    ctx.fillStyle = 'rgba(0,0,0,0.025)';
+    for (let y = 0; y < CANVAS_H; y += 4) ctx.fillRect(0, y, CANVAS_W, 2);
+    return;
+  }
 
   const drawBoard = (
     boardX: number,
@@ -468,21 +616,10 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
   };
 
   const playerLabel = state.playerName
-    ? state.playerName.toUpperCase().slice(0, 12)
+    ? state.playerName.toUpperCase().slice(0, 14)
     : 'PLAYER';
 
   drawBoard(PLAYER_BX, state.player, playerLabel, PLAYER_ACCENT, state.playerX, state.playerLane, false);
-  drawBoard(YUKI_BX,   state.yuki,   'YUKI',        YUKI_ACCENT,  state.yukiX,   state.yukiLane,   true);
-
-  // VS divider
-  ctx.fillStyle = '#0f2040';
-  ctx.font = 'bold 16px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('VS', CANVAS_W / 2, CANVAS_H / 2 - 8);
-  ctx.fillStyle = '#0a1830';
-  ctx.font = '10px monospace';
-  ctx.fillText('❄❄❄', CANVAS_W / 2, CANVAS_H / 2 + 8);
-  ctx.textAlign = 'left';
 
   // Scanlines
   ctx.fillStyle = 'rgba(0,0,0,0.025)';
