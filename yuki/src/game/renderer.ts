@@ -323,7 +323,7 @@ function drawWarehouses(
 
 // ─── Ice Cube Query Block ──────────────────────────────────────────────────────
 
-function drawFallingQuery(ctx: CanvasRenderingContext2D, query: Query, x: number, y: number, isYuki: boolean, spinupActive = false, fallProgress = 0) {
+function drawFallingQuery(ctx: CanvasRenderingContext2D, query: Query, x: number, y: number, isYuki: boolean, spinupActive = false) {
   const h = queryH(query.size);
   // Uniform ice color — no color hint about query size
   const iceColor = isYuki ? '#38bdf8' : '#67e8f9';
@@ -645,7 +645,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
     drawWarehouses(ctx, lane, board.warehouses, board.extraWarehouses, showFullHint, !isPenguin);
 
     if (state.currentQuery) {
-      drawFallingQuery(ctx, state.currentQuery, queryX, state.queryY, isPenguin, !isPenguin && state.spinupPending, fallProgress);
+      drawFallingQuery(ctx, state.currentQuery, queryX, state.queryY, isPenguin, !isPenguin && state.spinupPending);
     }
 
     drawFeedback(ctx, board);
