@@ -1,6 +1,7 @@
 export type WHSize = 'XS' | 'S' | 'M' | 'L' | 'XL';
 export type MatchQuality = 'perfect' | 'close' | 'poor';
 export type GameStatus = 'start' | 'tutorial' | 'playing' | 'gameover';
+export type AiRainPhase = 'none' | 'warning' | 'raining' | 'cleared';
 
 export interface Query {
   id: string;
@@ -46,6 +47,21 @@ export interface BoardScore {
   credits: number;
 }
 
+export interface AiRainDrop {
+  x: number;
+  y: number;
+  speed: number;
+  size: WHSize;
+  opacity: number;
+}
+
+export interface StageTransition {
+  active: boolean;
+  nextStage: number;
+  timer: number;
+  grantedPow: boolean;
+}
+
 export interface GameState {
   status: GameStatus;
   player: BoardScore;
@@ -64,6 +80,15 @@ export interface GameState {
   speed: number;
   playerName: string;
   spinupPending: boolean;
-  shakeMagnitude: number;  // screen shake, decays to 0 after life loss
-  bestScore: number;       // personal best loaded from localStorage
+  shakeMagnitude: number;
+  bestScore: number;
+  // Stage system
+  stage: number;
+  stageQueriesCompleted: number;
+  hasYukiPow: boolean;
+  yukiPowUsed: boolean;
+  aiRainPhase: AiRainPhase;
+  aiRainTimer: number;
+  aiRainDrops: AiRainDrop[];
+  stageTransition: StageTransition;
 }

@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { GameState, GameStatus, Query, MatchQuality, Warehouse, ExtraWarehouse } from '../game/types';
 import { sound } from '../game/sound';
 import {
-  WH_SIZES, SQL_SNIPPETS, BASE_SPEED, FAST_DROP_SPEED, SPEED_INC, QUERIES_PER_LEVEL,
+  WH_SIZES, SQL_SNIPPETS, FAST_DROP_SPEED, STAGE_SPEED_INC,
   WH_QUERY_COST, BASELINE_COST, COMBO_BONUS,
-  QUERY_START_Y, QUERY_LAND_Y, BOARD_W, WH_ZONE_Y, PLAYER_BX,
+  QUERY_START_Y, QUERY_LAND_Y, BOARD_W, BOARD_H, WH_ZONE_Y, PLAYER_BX,
   MAX_QUEUE, STARTING_CREDITS, PROCESS_TIME, PROCESS_LEVEL_INC, CREDIT_COST, WH_WEIGHTS,
+  STAGES, AI_RAIN_TRIGGER_QUERY, AI_RAIN_WARNING_DURATION, AI_RAIN_TIMEOUT, AI_RAIN_NO_POW_TIMEOUT,
+  YUKI_POW_COMBO_REQUIRED, STAGE_TRANSITION_DURATION,
 } from '../game/constants';
 import { render } from '../game/renderer';
 
@@ -76,8 +78,6 @@ function getMatchQuality(lane: number, size: string): MatchQuality {
   return diff === 0 ? 'perfect' : diff === 1 ? 'close' : 'poor';
 }
 
-// Dollars saved vs the "route everything to M" baseline.
-// Never negative — large queries that cost more than M still score $0, not a penalty.
 function calcSaved(routedLane: number, combo: number): number {
   const actualCost = WH_QUERY_COST[WH_SIZES[routedLane]];
   const saved = Math.max(0, BASELINE_COST - actualCost);
@@ -104,11 +104,19 @@ function makeInitialState(playerName: string): GameState {
     queryIndex: 0,
     level: 1,
     queryCountThisLevel: 0,
-    speed: BASE_SPEED,
+    speed: STAGES[0].speed,
     playerName,
     spinupPending: false,
     shakeMagnitude: 0,
     bestScore,
+    stage: 1,
+    stageQueriesCompleted: 0,
+    hasYukiPow: false,
+    yukiPowUsed: false,
+    aiRainPhase: 'none',
+    aiRainTimer: 0,
+    aiRainDrops: [],
+    stageTransition: { active: false, nextStage: 2, timer: 0, grantedPow: false },
   };
 }
 
@@ -130,11 +138,70 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
     let fastDrop = false;
     const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
+    // ── Stage helpers ─────────────────────────────────────────────────────────
+
+    function activateYukiPow() {
+      if (!state.hasYukiPow || state.yukiPowUsed) return;
+      if (state.aiRainPhase !== 'raining') return;
+      state.yukiPowUsed = true;
+      state.aiRainPhase = 'cleared';
+      state.aiRainTimer = 2.2;
+      state.aiRainDrops = [];
+      sound.yukiPow();
+      state.player.feedback.push({
+        text: '⚡ YUKI POW! AI Rain neutralized!',
+        x: BOARD_W / 2, y: 340, opacity: 1, color: '#67e8f9', big: true,
+      });
+    }
+
+    function completeStageTransition() {
+      const next = state.stageTransition.nextStage;
+      state.stage = next;
+      state.stageQueriesCompleted = 0;
+      state.queryCountThisLevel = 0;
+      state.level = next;
+      state.speed = STAGES[next - 1].speed;
+      state.stageTransition = { active: false, nextStage: next + 1, timer: 0, grantedPow: false };
+      state.queryY = QUERY_START_Y;
+      fastDrop = false;
+    }
+
+    function devJumpToStage(n: number) {
+      if (n < 1 || n > STAGES.length) return;
+      state.stage = n;
+      state.stageQueriesCompleted = 0;
+      state.queryCountThisLevel = 0;
+      state.level = n;
+      state.speed = STAGES[n - 1].speed;
+      state.queryY = QUERY_START_Y;
+      state.aiRainPhase = 'none';
+      state.aiRainTimer = 0;
+      state.aiRainDrops = [];
+      state.stageTransition = { active: false, nextStage: n + 1, timer: 0, grantedPow: false };
+      state.hasYukiPow = n >= 4;
+      state.yukiPowUsed = false;
+      fastDrop = false;
+    }
+
     // ── Input ─────────────────────────────────────────────────────────────────
 
     const onKeyDown = (e: KeyboardEvent) => {
+      // Dev: Ctrl+1–5 jumps to that stage
+      if (e.ctrlKey && e.key >= '1' && e.key <= '5') {
+        e.preventDefault();
+        devJumpToStage(parseInt(e.key));
+        return;
+      }
+
       if (state.status === 'tutorial') { state.status = 'playing'; return; }
       if (state.status !== 'playing') return;
+      if (state.stageTransition.active) return;
+
+      if (e.key === 'p' || e.key === 'P') { activateYukiPow(); return; }
+
+      // Freeze all normal input during AI rain event
+      if (state.aiRainPhase === 'warning' || state.aiRainPhase === 'raining') return;
+
       if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') state.playerLane = Math.max(0, state.playerLane - 1);
       if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { const lanes = buildLaneList(state.player.warehouses, state.player.extraWarehouses); state.playerLane = Math.min(lanes.length - 1, state.playerLane + 1); }
       if (e.key === ' ')         { e.preventDefault(); state.spinupPending = true; }
@@ -149,6 +216,12 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
     const onTouchEnd = (e: TouchEvent) => {
       if (state.status === 'tutorial') { state.status = 'playing'; return; }
       if (state.status !== 'playing') return;
+      if (state.stageTransition.active) return;
+
+      // YUKI POW tap during AI rain (raining only — warning is cinematic)
+      if (state.aiRainPhase === 'raining') { activateYukiPow(); return; }
+      if (state.aiRainPhase === 'warning') return;
+
       const t = e.changedTouches[0];
       const dx = t.clientX - touchStartX, dy = t.clientY - touchStartY;
       if (Math.abs(dx) > 35 && Math.abs(dx) > Math.abs(dy)) {
@@ -160,19 +233,19 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       const rect = canvas.getBoundingClientRect();
       const tapX = (t.clientX - rect.left) * (canvas.width / rect.width);
       const tapY = (t.clientY - rect.top) * (canvas.height / rect.height);
-      const inWHZone = tapY >= 10 + WH_ZONE_Y; // 10 = board's top offset
+      const inWHZone = tapY >= 10 + WH_ZONE_Y;
       const onBlock = Math.abs(tapX - (PLAYER_BX + state.playerX)) < 50;
       if (onBlock && now - lastTapTime < 300) {
-        state.spinupPending = true; // double-tap on block = spinup
+        state.spinupPending = true;
       } else if (tapX >= PLAYER_BX && tapX <= PLAYER_BX + BOARD_W) {
         const lanes = buildLaneList(state.player.warehouses, state.player.extraWarehouses);
         const dynLaneW = BOARD_W / lanes.length;
         const lane = Math.floor((tapX - PLAYER_BX) / dynLaneW);
         if (lane >= 0 && lane < lanes.length) {
           if (inWHZone && lane === state.playerLane) {
-            state.queryY = QUERY_LAND_Y; // tap own WH = instant drop
+            state.queryY = QUERY_LAND_Y;
           } else {
-            state.playerLane = lane; // tap other WH or upper area = move there
+            state.playerLane = lane;
           }
         }
       }
@@ -184,7 +257,13 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
     canvas.addEventListener('click', (e: MouseEvent) => {
       if (state.status === 'tutorial') { state.status = 'playing'; return; }
       if (state.status !== 'playing') return;
-      if (Date.now() - lastTouchEnd < 400) return; // suppress ghost click after touch
+      if (state.stageTransition.active) return;
+      if (Date.now() - lastTouchEnd < 400) return;
+
+      // YUKI POW click during AI rain
+      if (state.aiRainPhase === 'raining') { activateYukiPow(); return; }
+      if (state.aiRainPhase === 'warning') return;
+
       const rect = canvas.getBoundingClientRect();
       const x = (e.clientX - rect.left) * (canvas.width / rect.width);
       const y = (e.clientY - rect.top) * (canvas.height / rect.height);
@@ -194,7 +273,7 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
         const lane = Math.floor((x - PLAYER_BX) / dynLaneW);
         if (lane >= 0 && lane < lanes.length) {
           if (y >= 10 + WH_ZONE_Y && lane === state.playerLane) {
-            state.queryY = QUERY_LAND_Y; // click own WH = instant drop
+            state.queryY = QUERY_LAND_Y;
           } else {
             state.playerLane = lane;
           }
@@ -214,17 +293,37 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       state.currentQuery = state.queryPool[state.queryIndex];
       state.nextQuery = state.queryPool[state.queryIndex + 1] ?? null;
       state.queryY = QUERY_START_Y;
-      // Clamp playerLane in case an extra WH just disappeared
       const pLanes = buildLaneList(state.player.warehouses, state.player.extraWarehouses);
       state.playerLane = Math.min(state.playerLane, pLanes.length - 1);
       state.yukiLane = WH_SIZES.indexOf(state.currentQuery.size);
       state.spinupPending = false;
       fastDrop = false;
+
+      state.stageQueriesCompleted++;
       state.queryCountThisLevel++;
-      if (state.queryCountThisLevel >= QUERIES_PER_LEVEL) {
-        state.level++;
-        state.queryCountThisLevel = 0;
-        state.speed = BASE_SPEED + (state.level - 1) * SPEED_INC;
+
+      // Update speed within stage
+      const stageConfig = STAGES[state.stage - 1];
+      state.speed = stageConfig.speed + Math.floor(state.stageQueriesCompleted / 4) * STAGE_SPEED_INC;
+
+      // Trigger AI rain in stage 4
+      if (state.stage === 4 && state.stageQueriesCompleted === AI_RAIN_TRIGGER_QUERY && state.aiRainPhase === 'none') {
+        state.aiRainPhase = 'warning';
+        state.aiRainTimer = AI_RAIN_WARNING_DURATION;
+        state.queryY = QUERY_START_Y; // park query at top; it won't fall until rain is over
+        sound.aiRainWarning();
+      }
+
+      // Check stage completion (stage 5 is infinite)
+      if (stageConfig.queries > 0 && state.stageQueriesCompleted >= stageConfig.queries && state.stage < STAGES.length) {
+        const grantedPow = state.stage === 3 && state.hasYukiPow;
+        state.stageTransition = {
+          active: true,
+          nextStage: state.stage + 1,
+          timer: STAGE_TRANSITION_DURATION,
+          grantedPow,
+        };
+        sound.stageAdvance();
       }
     }
 
@@ -269,6 +368,13 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
             sound.perfect();
             if (b.combo >= 5 && b.combo % 5 === 0) sound.combo(b.combo);
             b.feedback.push({ text: `❄ PERFECT! Saved $${saved}`, x: fx, y: fy, opacity: 1, color: '#67e8f9' });
+
+            // Earn YUKI POW in stage 3 on reaching combo threshold
+            if (state.stage === 3 && b.combo >= YUKI_POW_COMBO_REQUIRED && !state.hasYukiPow) {
+              state.hasYukiPow = true;
+              b.feedback.push({ text: '⚡ YUKI POW EARNED!', x: fx, y: fy - 56, opacity: 1, color: '#67e8f9', big: true });
+              sound.newBest();
+            }
           } else if (quality === 'close') {
             b.combo = 0;
             sound.close();
@@ -318,17 +424,14 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
     }
 
     function updateWarehouses(dt: number) {
-      // Processing slows each level — queues back up more as game speeds up
-      const levelMult = 1 + (state.level - 1) * PROCESS_LEVEL_INC;
+      const levelMult = 1 + (state.stage - 1) * PROCESS_LEVEL_INC;
       for (const board of [state.player, state.yuki]) {
-        // Base warehouses
         for (const wh of board.warehouses) {
           if (wh.queue.length > 0) {
             wh.queue[0].progress += dt / (PROCESS_TIME[wh.size] * levelMult);
             if (wh.queue[0].progress >= 1) wh.queue.shift();
           }
         }
-        // Extra warehouses
         for (const e of board.extraWarehouses) {
           e.fadeIn = Math.min(1, e.fadeIn + dt * 3.5);
           if (e.queue.length > 0) {
@@ -342,48 +445,124 @@ export function useGame(canvasRef: React.RefObject<HTMLCanvasElement>, playerNam
       }
     }
 
+    function updateAiRain(dt: number) {
+      const phase = state.aiRainPhase;
+      if (phase === 'none') return;
+
+      if (phase === 'warning') {
+        state.aiRainTimer -= dt;
+        // Sparse warning drops
+        if (Math.random() < dt * 2.5) {
+          state.aiRainDrops.push({
+            x: 20 + Math.random() * (BOARD_W - 40),
+            y: QUERY_START_Y - 10,
+            speed: 55 + Math.random() * 45,
+            size: WH_SIZES[Math.floor(Math.random() * WH_SIZES.length)],
+            opacity: 0.75,
+          });
+        }
+        if (state.aiRainTimer <= 0) {
+          state.aiRainPhase = 'raining';
+          state.aiRainTimer = state.hasYukiPow ? AI_RAIN_TIMEOUT : AI_RAIN_NO_POW_TIMEOUT;
+          // Freeze query at top so player focuses on the POW activation
+          state.queryY = QUERY_START_Y;
+          fastDrop = false;
+        }
+      } else if (phase === 'raining') {
+        state.aiRainTimer -= dt;
+        // Dense rain
+        const rate = state.hasYukiPow ? 5 : 12;
+        const n = Math.floor(rate * dt + Math.random());
+        for (let i = 0; i < n; i++) {
+          state.aiRainDrops.push({
+            x: 20 + Math.random() * (BOARD_W - 40),
+            y: QUERY_START_Y - 20,
+            speed: 110 + Math.random() * 130,
+            size: WH_SIZES[Math.floor(Math.random() * WH_SIZES.length)],
+            opacity: 1,
+          });
+        }
+        if (state.aiRainTimer <= 0 && !state.yukiPowUsed) {
+          // Overwhelmed — game over
+          state.player.lives = 0;
+          state.status = 'gameover';
+        }
+      } else if (phase === 'cleared') {
+        state.aiRainTimer -= dt;
+        state.aiRainDrops = state.aiRainDrops
+          .map(d => ({ ...d, opacity: d.opacity - 3 * dt }))
+          .filter(d => d.opacity > 0);
+        if (state.aiRainTimer <= 0) {
+          state.aiRainPhase = 'none';
+          state.aiRainDrops = [];
+        }
+      }
+
+      // Move drops (warning + raining phases)
+      if (phase === 'warning' || phase === 'raining') {
+        state.aiRainDrops = state.aiRainDrops
+          .map(d => ({ ...d, y: d.y + d.speed * dt, opacity: d.y > QUERY_LAND_Y - 30 ? Math.max(0, d.opacity - 5 * dt) : d.opacity }))
+          .filter(d => d.opacity > 0 && d.y < BOARD_H);
+      }
+    }
+
     // ── Loop ──────────────────────────────────────────────────────────────────
 
     let lastT = performance.now(), raf = 0;
 
     const loop = (ts: number) => {
+      try {
       const dt = Math.min((ts - lastT) / 1000, 0.05);
       lastT = ts;
 
       if (state.status === 'playing') {
-        // Dynamic lane positions
-        const pList = buildLaneList(state.player.warehouses, state.player.extraWarehouses);
-        const yList = buildLaneList(state.yuki.warehouses, state.yuki.extraWarehouses);
-        state.playerLane = Math.min(state.playerLane, pList.length - 1);
-        const pLaneW = BOARD_W / pList.length;
-        const pTargetX = state.playerLane * pLaneW + pLaneW / 2;
-        const yTargetX = getBaseLaneX(yList, state.yukiLane);
-        state.playerX = lerp(state.playerX, pTargetX, 1 - Math.exp(-14 * dt));
-        state.yukiX   = lerp(state.yukiX,   yTargetX, 1 - Math.exp(-22 * dt));
+        if (state.stageTransition.active) {
+          // Frozen gameplay — only tick the transition countdown
+          state.stageTransition.timer -= dt;
+          if (state.stageTransition.timer <= 0) completeStageTransition();
+        } else {
+          // AI rain update (runs while query is frozen during warning/raining)
+          if (state.aiRainPhase !== 'none') updateAiRain(dt);
 
-        state.queryY += (fastDrop ? FAST_DROP_SPEED : state.speed) * dt;
+          // Freeze gameplay during warning AND raining — the rain is a cinematic interruption
+          const queryFrozen = state.aiRainPhase === 'warning' || state.aiRainPhase === 'raining';
 
-        if (state.queryY >= QUERY_LAND_Y) {
-          const over = scorePlayer();
-          scoreYuki();
-          if (!over) advanceQuery();
+          if (!queryFrozen) {
+            // Dynamic lane positions
+            const pList = buildLaneList(state.player.warehouses, state.player.extraWarehouses);
+            const yList = buildLaneList(state.yuki.warehouses, state.yuki.extraWarehouses);
+            state.playerLane = Math.min(state.playerLane, pList.length - 1);
+            const pLaneW = BOARD_W / pList.length;
+            const pTargetX = state.playerLane * pLaneW + pLaneW / 2;
+            const yTargetX = getBaseLaneX(yList, state.yukiLane);
+            state.playerX = lerp(state.playerX, pTargetX, 1 - Math.exp(-14 * dt));
+            state.yukiX   = lerp(state.yukiX,   yTargetX, 1 - Math.exp(-22 * dt));
+
+            state.queryY += (fastDrop ? FAST_DROP_SPEED : state.speed) * dt;
+
+            if (state.queryY >= QUERY_LAND_Y) {
+              const over = scorePlayer();
+              scoreYuki();
+              if (!over) advanceQuery();
+            }
+
+            updateWarehouses(dt);
+          }
         }
 
-        updateWarehouses(dt);
-
+        // Feedback and shake always update
         for (const board of [state.player, state.yuki]) {
           board.feedback = board.feedback
             .map(fb => ({ ...fb, y: fb.y - 32 * dt, opacity: fb.opacity - (fb.big ? 0.35 : 0.48) * dt }))
             .filter(fb => fb.opacity > 0);
         }
-
-        // Decay screen shake
         if (state.shakeMagnitude > 0) {
           state.shakeMagnitude = Math.max(0, state.shakeMagnitude - 60 * dt);
         }
       }
 
-      render(ctx, state);
+      try { render(ctx, state); } catch (err) { console.error('render error:', err); }
+      } catch (err) { console.error('loop error:', err); }
 
       if (state.status === 'playing' || state.status === 'tutorial') { raf = requestAnimationFrame(loop); }
       else {

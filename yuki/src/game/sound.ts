@@ -47,4 +47,16 @@ export const sound = {
   newBest() {
     [523, 659, 784, 1047].forEach((f, i) => tone(f, 'sine', 0.14, 0.26, i * 0.11));
   },
+  stageAdvance() {
+    [440, 554, 659, 880].forEach((f, i) => tone(f, 'sine', 0.13, 0.24, i * 0.09));
+  },
+  yukiPow() {
+    [440, 660, 880, 1320, 1760].forEach((f, i) => tone(f, 'sine', 0.22, 0.30, i * 0.07));
+    tone(2200, 'sine', 0.12, 0.20, 0.42);
+  },
+  aiRainWarning() {
+    tone(220, 'sawtooth', 0.40, 0.18);
+    tone(165, 'sawtooth', 0.50, 0.22, 0.22);
+    tone(110, 'square',   0.60, 0.26, 0.48);
+  },
 };

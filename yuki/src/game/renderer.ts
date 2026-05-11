@@ -2,8 +2,9 @@ import {
   BOARD_W, BOARD_H, HEADER_H, WH_ZONE_H, WH_ZONE_Y,
   QUERY_W, WH_SIZES, WH_COLORS, WH_BG, PLAYER_BX, CANVAS_W, CANVAS_H,
   MAX_QUEUE, STARTING_CREDITS, QUERY_START_Y, QUERY_LAND_Y,
+  STAGES, STAGE_TRANSITION_DURATION, AI_RAIN_TIMEOUT,
 } from './constants';
-import { BoardScore, ExtraWarehouse, GameState, Query, Warehouse, WHSize } from './types';
+import { BoardScore, ExtraWarehouse, GameState, Query, StageTransition, Warehouse, WHSize } from './types';
 import { buildLaneList, LaneEntry } from '../hooks/useGame';
 
 const PLAYER_ACCENT = '#a78bfa';
@@ -92,6 +93,312 @@ function drawSnowflake(ctx: CanvasRenderingContext2D, cx: number, cy: number, r:
   }
 }
 
+// ─── Storm cloud ───────────────────────────────────────────────────────────────
+
+function drawCloud(ctx: CanvasRenderingContext2D, cx: number, cy: number, alpha: number, pulse: number) {
+  ctx.globalAlpha = alpha;
+  const scale = 1 + pulse * 0.04;
+  const r = 32 * scale;
+  const bumps: [number, number, number][] = [
+    [0, 0, r],
+    [-r * 0.75, r * 0.28, r * 0.72],
+    [ r * 0.75, r * 0.28, r * 0.72],
+    [-r * 0.38, -r * 0.38, r * 0.60],
+    [ r * 0.38, -r * 0.38, r * 0.60],
+  ];
+  // Cheap glow: one large semi-transparent circle instead of shadowBlur on 5 fills
+  ctx.globalAlpha = alpha * (0.30 + 0.20 * pulse);
+  ctx.fillStyle = '#7c3aed';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 1.9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = alpha;
+
+  // Dark inner halo
+  for (const [dx, dy, br] of bumps) {
+    ctx.fillStyle = '#180830';
+    ctx.beginPath();
+    ctx.arc(cx + dx, cy + dy, br + 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Cloud body
+  for (const [dx, dy, br] of bumps) {
+    ctx.fillStyle = '#2d1060';
+    ctx.beginPath();
+    ctx.arc(cx + dx, cy + dy, br, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Bottom flat edge (make it look like a storm cloud underside)
+  ctx.fillStyle = '#1a0845';
+  ctx.fillRect(cx - r * 1.1, cy + 12, r * 2.2, r * 0.5);
+  ctx.globalAlpha = 1;
+}
+
+// ─── AI Rain overlay ───────────────────────────────────────────────────────────
+
+function drawAiRainOverlay(ctx: CanvasRenderingContext2D, state: GameState) {
+  const { aiRainPhase, aiRainTimer, aiRainDrops, hasYukiPow, yukiPowUsed } = state;
+  if (aiRainPhase === 'none') return;
+
+  const cx = BOARD_W / 2;
+  const cloudY = HEADER_H + 60;
+  const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 190);
+
+  // Background tint
+  if (aiRainPhase === 'warning') {
+    ctx.fillStyle = `rgba(80,10,10,${0.18 + 0.08 * pulse})`;
+    ctx.fillRect(0, HEADER_H, BOARD_W, WH_ZONE_Y - HEADER_H);
+  } else if (aiRainPhase === 'raining') {
+    ctx.fillStyle = `rgba(40,0,80,${0.55 + 0.15 * pulse})`;
+    ctx.fillRect(0, HEADER_H, BOARD_W, WH_ZONE_Y - HEADER_H);
+  }
+
+  // Cloud
+  if (aiRainPhase === 'warning' || aiRainPhase === 'raining') {
+    drawCloud(ctx, cx, cloudY, 0.92, pulse);
+
+    // Lightning bolts
+    const boltAlpha = aiRainPhase === 'raining' ? 0.7 + 0.3 * pulse : 0.5 * pulse;
+    if (Math.random() < (aiRainPhase === 'raining' ? 0.12 : 0.06)) {
+      ctx.strokeStyle = '#c084fc';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = boltAlpha;
+      const lx = cx + (Math.random() - 0.5) * 60;
+      ctx.beginPath();
+      ctx.moveTo(lx, cloudY + 28);
+      ctx.lineTo(lx - 9, cloudY + 52);
+      ctx.lineTo(lx + 6, cloudY + 52);
+      ctx.lineTo(lx - 5, cloudY + 78);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Rain drops (visual-only AI query blocks)
+  for (const drop of aiRainDrops) {
+    ctx.globalAlpha = drop.opacity * 0.88;
+    rrect(ctx, drop.x - 19, drop.y - 13, 38, 13, 3);
+    ctx.fillStyle = '#2d0d5e';
+    ctx.fill();
+    ctx.strokeStyle = '#7c3aed';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#a78bfa';
+    ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('AI', drop.x, drop.y - 3);
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+
+  // ── Warning phase message ──────────────────────────────────────────────────
+  if (aiRainPhase === 'warning') {
+    ctx.globalAlpha = 0.75 + 0.25 * pulse;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f87171';
+    ctx.font = 'bold 20px "Courier New", monospace';
+    ctx.fillText('⚠  AI RAIN INCOMING!', cx, cloudY + 118);
+    ctx.fillStyle = hasYukiPow ? '#67e8f9' : '#fb923c';
+    ctx.font = '12px "Courier New", monospace';
+    ctx.fillText(
+      hasYukiPow
+        ? 'Prepare your YUKI POW...'
+        : 'You have NO YUKI POW — prepare for defeat!',
+      cx, cloudY + 140,
+    );
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+  }
+
+  // ── Raining phase message ──────────────────────────────────────────────────
+  if (aiRainPhase === 'raining') {
+    ctx.textAlign = 'center';
+
+    if (hasYukiPow && !yukiPowUsed) {
+      // Countdown
+      const maxTime = AI_RAIN_TIMEOUT;
+      const timeLeft = Math.max(0, aiRainTimer);
+      const urgent = timeLeft < 4;
+      const color = urgent ? '#f87171' : '#67e8f9';
+
+      ctx.globalAlpha = 0.88 + 0.12 * pulse;
+      ctx.fillStyle = color;
+      ctx.font = `bold ${urgent ? 20 : 16}px "Courier New", monospace`;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = urgent ? 20 : 10;
+      const hint = IS_TOUCH ? '▶  TAP ANYWHERE — YUKI POW' : '▶  PRESS  P  — YUKI POW';
+      ctx.fillText(hint, cx, cloudY + 110);
+      ctx.shadowBlur = 0;
+
+      // Big countdown number
+      ctx.fillStyle = color;
+      ctx.font = `bold ${urgent ? 52 : 40}px "Courier New", monospace`;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = urgent ? 30 : 14;
+      ctx.fillText(timeLeft.toFixed(1) + 's', cx, cloudY + 165);
+      ctx.shadowBlur = 0;
+
+      // Progress bar
+      const barW = 200;
+      const barRatio = timeLeft / maxTime;
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#0a1628';
+      ctx.fillRect(cx - barW / 2, cloudY + 178, barW, 6);
+      ctx.fillStyle = barRatio > 0.4 ? '#67e8f9' : '#f87171';
+      ctx.fillRect(cx - barW / 2, cloudY + 178, barW * barRatio, 6);
+      ctx.globalAlpha = 1;
+
+      // Touch tap button
+      if (IS_TOUCH) {
+        const btnY = WH_ZONE_Y - 64;
+        ctx.globalAlpha = 0.92;
+        rrect(ctx, cx - 90, btnY - 24, 180, 40, 10);
+        ctx.fillStyle = '#071830';
+        ctx.fill();
+        ctx.strokeStyle = '#67e8f9';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#67e8f9';
+        ctx.shadowBlur = 16;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#67e8f9';
+        ctx.font = 'bold 18px "Courier New", monospace';
+        ctx.fillText('⚡ YUKI POW', cx, btnY + 8);
+        ctx.globalAlpha = 1;
+      }
+    } else if (!hasYukiPow) {
+      // Doom countdown
+      const timeLeft = Math.max(0, aiRainTimer);
+      ctx.globalAlpha = 0.9 + 0.1 * pulse;
+      ctx.fillStyle = '#f87171';
+      ctx.font = 'bold 17px "Courier New", monospace';
+      ctx.shadowColor = '#f87171';
+      ctx.shadowBlur = 14;
+      ctx.fillText('AI RAIN OVERWHELMING WAREHOUSE!', cx, cloudY + 110);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fb923c';
+      ctx.font = '13px monospace';
+      ctx.fillText('No YUKI POW — defeat in ' + timeLeft.toFixed(1) + 's', cx, cloudY + 134);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.textAlign = 'left';
+  }
+
+  // ── Cleared phase flash ────────────────────────────────────────────────────
+  if (aiRainPhase === 'cleared') {
+    const elapsed = 2.2 - aiRainTimer;
+    const flashAlpha = Math.max(0, 0.9 - elapsed * 1.2);
+    if (flashAlpha > 0) {
+      ctx.globalAlpha = flashAlpha;
+      ctx.fillStyle = '#67e8f9';
+      ctx.fillRect(0, 0, BOARD_W, BOARD_H);
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+// ─── Stage transition overlay ─────────────────────────────────────────────────
+
+function drawStageTransition(ctx: CanvasRenderingContext2D, transition: StageTransition, hasYukiPow: boolean) {
+  const { nextStage, timer, grantedPow } = transition;
+  const elapsed = STAGE_TRANSITION_DURATION - timer;
+  const fadeIn  = Math.min(1, elapsed / 0.3);
+  const fadeOut = Math.max(0, 1 - Math.max(0, elapsed - (STAGE_TRANSITION_DURATION - 0.4)) / 0.4);
+  const alpha   = Math.min(fadeIn, fadeOut);
+
+  ctx.globalAlpha = alpha * 0.94;
+  ctx.fillStyle = '#000d1a';
+  ctx.fillRect(0, 0, BOARD_W, BOARD_H);
+  ctx.globalAlpha = alpha;
+
+  const cx = BOARD_W / 2;
+  const cy = BOARD_H / 2;
+  const stageConfig = STAGES[nextStage - 1];
+
+  ctx.textAlign = 'center';
+
+  // "STAGE X" heading
+  ctx.fillStyle = '#1e3a5f';
+  ctx.font = 'bold 12px "Courier New", monospace';
+  ctx.fillText('INCOMING', cx, cy - 88);
+
+  ctx.fillStyle = '#67e8f9';
+  ctx.font = 'bold 54px "Courier New", monospace';
+  ctx.shadowColor = '#67e8f9';
+  ctx.shadowBlur = 30;
+  ctx.fillText(`STAGE ${nextStage}`, cx, cy - 28);
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#a78bfa';
+  ctx.font = 'bold 22px "Courier New", monospace';
+  ctx.fillText(stageConfig.name, cx, cy + 16);
+
+  ctx.fillStyle = '#475569';
+  ctx.font = '13px "Courier New", monospace';
+  ctx.fillText(stageConfig.desc, cx, cy + 46);
+
+  // YUKI POW status for stage 4
+  if (nextStage === 4) {
+    if (grantedPow || hasYukiPow) {
+      ctx.fillStyle = '#67e8f9';
+      ctx.font = 'bold 14px "Courier New", monospace';
+      ctx.shadowColor = '#67e8f9';
+      ctx.shadowBlur = 12;
+      ctx.fillText('⚡ YUKI POW READY — you can stop the AI Rain!', cx, cy + 86);
+      ctx.shadowBlur = 0;
+    } else {
+      ctx.fillStyle = '#f87171';
+      ctx.font = 'bold 14px "Courier New", monospace';
+      ctx.fillText('⚠  No YUKI POW — AI Rain cannot be stopped!', cx, cy + 86);
+      ctx.fillStyle = '#475569';
+      ctx.font = '11px monospace';
+      ctx.fillText('(earn it by hitting a 5× combo in Stage 3)', cx, cy + 106);
+    }
+  }
+
+  // Stage-specific tips
+  if (nextStage === 2) {
+    ctx.fillStyle = '#334155';
+    ctx.font = '12px monospace';
+    ctx.fillText('Size labels are gone — read the complexity bar!', cx, cy + 86);
+  }
+  if (nextStage === 3) {
+    ctx.fillStyle = '#a78bfa';
+    ctx.font = '12px monospace';
+    ctx.fillText('Hit a 5× combo to unlock YUKI POW before Stage 4!', cx, cy + 86);
+  }
+  if (nextStage === 5) {
+    ctx.fillStyle = '#67e8f9';
+    ctx.font = 'bold 13px "Courier New", monospace';
+    ctx.shadowColor = '#67e8f9';
+    ctx.shadowBlur = 8;
+    ctx.fillText('🎉 You survived the AI Rain! Now go full speed.', cx, cy + 86);
+    ctx.shadowBlur = 0;
+  }
+
+  // Countdown
+  const timeLeft = Math.max(0, Math.ceil(timer));
+  ctx.fillStyle = '#1e3a5f';
+  ctx.font = '11px monospace';
+  ctx.fillText(`starting in ${timeLeft}…`, cx, cy + 148);
+
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
+// ─── Stage 1 hint strip ────────────────────────────────────────────────────────
+
+function drawStage1Hint(ctx: CanvasRenderingContext2D) {
+  ctx.globalAlpha = 0.65;
+  ctx.fillStyle = '#1e3a5f';
+  ctx.font = '10px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('Size label shown ↑  ·  route the query to the matching warehouse below', BOARD_W / 2, WH_ZONE_Y - 9);
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
 // ─── Header ────────────────────────────────────────────────────────────────────
 
 function drawHeader(
@@ -99,12 +406,14 @@ function drawHeader(
   board: BoardScore,
   label: string,
   accent: string,
-  level: number,
+  stage: number,
   nextQuery: Query | null,
   _isPenguin: boolean,
   spinupPending: boolean,
   yukiScore: number,
   bestScore: number,
+  hasYukiPow: boolean,
+  yukiPowUsed: boolean,
 ) {
   // Player name + spinup indicator (left)
   ctx.fillStyle = spinupPending ? '#67e8f9' : accent;
@@ -138,11 +447,13 @@ function drawHeader(
     ctx.fillText(`${board.combo}× COMBO`, BOARD_W / 2, 45);
   }
 
-  // Level + Next query (right)
+  // Stage label + next query (right)
   ctx.textAlign = 'right';
   ctx.fillStyle = '#475569';
   ctx.font = '10px monospace';
-  ctx.fillText(`LVL ${level}`, BOARD_W - 14, 22);
+  const stageName = STAGES[stage - 1]?.name ?? '';
+  ctx.fillText(`S${stage} ${stageName}`, BOARD_W - 14, 22);
+
   if (nextQuery) {
     ctx.fillStyle = '#334155';
     ctx.font = '8px monospace';
@@ -164,13 +475,27 @@ function drawHeader(
   ctx.font = '8px monospace';
   ctx.fillText(`${board.credits}cr`, 14, 56);
 
-  // Personal best (left) + Yuki ghost score (right) — tiny dim row above divider
-  ctx.font = '8px "Courier New", monospace';
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#1e3a5f';
-  ctx.fillText(bestScore > 0 ? `PB $${bestScore.toLocaleString()}` : 'PB ---', 14, 70);
+  // Bottom row: YUKI POW badge (left) or PB (left) + Yuki score (right)
+  if (hasYukiPow && !yukiPowUsed) {
+    const pulse = 0.65 + 0.35 * Math.sin(Date.now() / 260);
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = '#67e8f9';
+    ctx.font = 'bold 9px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.shadowColor = '#67e8f9';
+    ctx.shadowBlur = 8;
+    ctx.fillText('⚡ POW READY', 14, 70);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.font = '8px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#1e3a5f';
+    ctx.fillText(bestScore > 0 ? `PB $${bestScore.toLocaleString()}` : 'PB ---', 14, 70);
+  }
   ctx.textAlign = 'right';
   ctx.fillStyle = yukiScore > board.score ? '#3a1820' : '#1a3020';
+  ctx.font = '8px "Courier New", monospace';
   ctx.fillText(`🐧 $${yukiScore.toLocaleString()}`, BOARD_W - 14, 70);
 
   // Divider
@@ -180,6 +505,7 @@ function drawHeader(
   ctx.moveTo(0, HEADER_H);
   ctx.lineTo(BOARD_W, HEADER_H);
   ctx.stroke();
+  ctx.textAlign = 'left';
 }
 
 // ─── Warehouses (Snowflake Cooling Chambers) ───────────────────────────────────
@@ -196,11 +522,9 @@ function drawLane(
 
   ctx.globalAlpha = lane.opacity;
 
-  // Background
   ctx.fillStyle = lane.isExtra ? '#001a2e' : isFull ? '#2a0a0a' : isHighlighted ? color + '18' : WH_BG[lane.size as WHSize];
   ctx.fillRect(x + 1, WH_ZONE_Y + 1, laneW - 2, WH_ZONE_H - 2);
 
-  // Border
   if (lane.isExtra) { ctx.shadowColor = '#67e8f9'; ctx.shadowBlur = 14; }
   else if (isFull)  { ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 8; }
   else if (isHighlighted) { ctx.shadowColor = color; ctx.shadowBlur = 12; }
@@ -209,12 +533,11 @@ function drawLane(
   ctx.strokeRect(x + 1, WH_ZONE_Y + 1, laneW - 2, WH_ZONE_H - 2);
   ctx.shadowBlur = 0;
 
-  // Label
-  const label = lane.isExtra ? `⚡ ${lane.size}` : `❄ ${lane.size}`;
+  const lbl = lane.isExtra ? `⚡ ${lane.size}` : `❄ ${lane.size}`;
   ctx.fillStyle = lane.isExtra ? '#67e8f9' : isFull ? '#ef4444' : isHighlighted ? color : color + 'aa';
   ctx.font = `bold ${laneW > 70 ? 13 : 11}px "Courier New", monospace`;
   ctx.textAlign = 'center';
-  ctx.fillText(label, x + laneW / 2, WH_ZONE_Y + 20);
+  ctx.fillText(lbl, x + laneW / 2, WH_ZONE_Y + 20);
 
   if (lane.isExtra) {
     ctx.fillStyle = '#67e8f966';
@@ -226,7 +549,6 @@ function drawLane(
     ctx.fillText('FULL', x + laneW / 2, WH_ZONE_Y + 31);
   }
 
-  // Queue slots — taller with more readable text
   const slotW = laneW - 14;
   const slotH = 16;
   const slotX = x + 7;
@@ -250,11 +572,9 @@ function drawLane(
     ctx.strokeRect(slotX, sy, slotW, slotH);
   }
 
-  // Snowflake
   const sfAlpha = isFull ? '22' : lane.isExtra ? 'cc' : isHighlighted ? 'aa' : '33';
   drawSnowflake(ctx, x + laneW / 2, WH_ZONE_Y + 106, Math.min(14, laneW * 0.13), color + sfAlpha);
 
-  // Queue danger bar — thin fill on left edge, grows from bottom as queue fills
   if (lane.queue.length > 0) {
     const fillRatio = lane.queue.length / MAX_QUEUE;
     const barH = (WH_ZONE_H - 6) * fillRatio;
@@ -275,7 +595,6 @@ function drawWarehouses(
   showFullHint: boolean,
   isPlayer: boolean,
 ) {
-  // Zone background
   ctx.fillStyle = '#030a18';
   ctx.fillRect(0, WH_ZONE_Y, BOARD_W, WH_ZONE_H);
   ctx.strokeStyle = '#0f2a4a';
@@ -287,15 +606,12 @@ function drawWarehouses(
 
   const lanes = buildLaneList(warehouses, extraWarehouses);
   const laneW = BOARD_W / lanes.length;
-
-  // playerLane is already a visual index
   const highlightVisualIdx = Math.min(playerLane, lanes.length - 1);
 
   for (let i = 0; i < lanes.length; i++) {
     drawLane(ctx, lanes[i], i * laneW, laneW, i === highlightVisualIdx);
   }
 
-  // "FULL → SPACE" hint above full target lane
   if (showFullHint && isPlayer && highlightVisualIdx >= 0) {
     const targetLane = lanes[highlightVisualIdx];
     if (targetLane && targetLane.queue.length >= MAX_QUEUE) {
@@ -316,9 +632,16 @@ function drawWarehouses(
 
 // ─── Ice Cube Query Block ──────────────────────────────────────────────────────
 
-function drawFallingQuery(ctx: CanvasRenderingContext2D, query: Query, x: number, y: number, isYuki: boolean, spinupActive = false) {
+function drawFallingQuery(
+  ctx: CanvasRenderingContext2D,
+  query: Query,
+  x: number,
+  y: number,
+  isYuki: boolean,
+  spinupActive = false,
+  showSizeLabel = false,
+) {
   const h = queryH(query.size);
-  // Uniform ice color — no color hint about query size
   const iceColor = isYuki ? '#38bdf8' : '#67e8f9';
   const qx = x - QUERY_W / 2;
   const qy = y - h;
@@ -326,7 +649,6 @@ function drawFallingQuery(ctx: CanvasRenderingContext2D, query: Query, x: number
   ctx.shadowColor = spinupActive ? '#ffffff' : iceColor;
   ctx.shadowBlur = spinupActive ? 30 : isYuki ? 10 : 22;
 
-  // Ice body — noticeably lighter than board background so the block stands out
   const grad = ctx.createLinearGradient(qx, qy, qx + QUERY_W, qy + h);
   grad.addColorStop(0, '#163560');
   grad.addColorStop(1, '#0e2448');
@@ -335,7 +657,6 @@ function drawFallingQuery(ctx: CanvasRenderingContext2D, query: Query, x: number
   rrect(ctx, qx, qy, QUERY_W, h, 6);
   ctx.fill();
 
-  // Crystal border (uniform)
   ctx.strokeStyle = spinupActive ? '#ffffff' : iceColor;
   ctx.lineWidth = isYuki ? 1.5 : 2;
   ctx.beginPath();
@@ -344,7 +665,6 @@ function drawFallingQuery(ctx: CanvasRenderingContext2D, query: Query, x: number
 
   ctx.shadowBlur = 0;
 
-  // Ice shine
   const shine = ctx.createLinearGradient(qx, qy, qx + QUERY_W * 0.7, qy + h * 0.7);
   shine.addColorStop(0, 'rgba(200,240,255,0.12)');
   shine.addColorStop(1, 'rgba(200,240,255,0)');
@@ -360,6 +680,15 @@ function drawFallingQuery(ctx: CanvasRenderingContext2D, query: Query, x: number
     ctx.font = 'bold 12px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('⚡ SPIN UP', x, qy + 14);
+  } else if (showSizeLabel) {
+    // Stage 1: show size prominently so player can learn the mapping
+    ctx.fillStyle = WH_COLORS[query.size as WHSize];
+    ctx.font = `bold ${h > 38 ? 18 : 15}px "Courier New", monospace`;
+    ctx.textAlign = 'center';
+    ctx.shadowColor = WH_COLORS[query.size as WHSize];
+    ctx.shadowBlur = 10;
+    ctx.fillText(query.size, x, qy + h / 2 + 6);
+    ctx.shadowBlur = 0;
   } else {
     // Complexity bar (5 segments)
     const segCount = 5;
@@ -388,7 +717,6 @@ function drawFeedback(ctx: CanvasRenderingContext2D, board: BoardScore) {
       ctx.shadowColor = fb.color;
       ctx.shadowBlur = 14;
     } else {
-      // Subtle drop-shadow for readability over the dark play field
       ctx.shadowColor = '#000000';
       ctx.shadowBlur = 6;
     }
@@ -423,7 +751,6 @@ function drawTutorial(ctx: CanvasRenderingContext2D, playerName: string) {
     ctx.fillText(text, 36, y);
   };
 
-  // Title
   ctx.textAlign = 'center';
   ctx.fillStyle = '#67e8f9';
   ctx.font = 'bold 28px "Courier New", monospace';
@@ -436,10 +763,14 @@ function drawTutorial(ctx: CanvasRenderingContext2D, playerName: string) {
   const greeting = playerName ? `Route queries · save the most $  ·  good luck, ${playerName}!` : 'Route queries to the right warehouse · save the most $';
   ctx.fillText(greeting, cx, 76);
 
-  div(92);
+  // 5 stages callout
+  ctx.fillStyle = '#a78bfa';
+  ctx.font = '11px "Courier New", monospace';
+  ctx.fillText('5 stages  ·  earn YUKI POW in Stage 3  ·  survive the AI Rain in Stage 4!', cx, 90);
 
-  // ── Complexity bar
-  sec('COMPLEXITY BAR  →  SIZE OF WAREHOUSE NEEDED', 110);
+  div(98);
+
+  sec('COMPLEXITY BAR  →  SIZE OF WAREHOUSE NEEDED', 116);
   const colW = (CANVAS_W - 72) / 5;
   for (let i = 0; i < 5; i++) {
     const bx = 36 + i * colW + colW / 2;
@@ -447,51 +778,51 @@ function drawTutorial(ctx: CanvasRenderingContext2D, playerName: string) {
     const sx = bx - totalW / 2;
     for (let s = 0; s < 5; s++) {
       ctx.fillStyle = s <= i ? CLR[i] : '#1a3a6a';
-      ctx.fillRect(sx + s * (segW + segGap), 124, segW, 9);
+      ctx.fillRect(sx + s * (segW + segGap), 130, segW, 9);
     }
     ctx.fillStyle = CLR[i];
     ctx.font = 'bold 12px "Courier New", monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(SIZES[i], bx, 152);
+    ctx.fillText(SIZES[i], bx, 158);
   }
 
-  div(165);
+  div(171);
 
-  // ── WH size badges
-  sec('MATCH QUERY TO THE RIGHT WAREHOUSE SIZE', 183);
+  sec('MATCH QUERY TO THE RIGHT WAREHOUSE SIZE', 189);
   const badgeW = Math.floor((CANVAS_W - 72 - 16) / 5);
   for (let i = 0; i < 5; i++) {
     const bx = 36 + i * (badgeW + 4);
-    rrect(ctx, bx, 193, badgeW, 30, 6);
+    rrect(ctx, bx, 199, badgeW, 30, 6);
     ctx.fillStyle = BKG[i];
     ctx.fill();
     ctx.strokeStyle = CLR[i] + '88';
     ctx.lineWidth = 1.5;
-    rrect(ctx, bx, 193, badgeW, 30, 6);
+    rrect(ctx, bx, 199, badgeW, 30, 6);
     ctx.stroke();
     ctx.fillStyle = CLR[i];
     ctx.font = 'bold 13px "Courier New", monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(`❄ ${SIZES[i]}`, bx + badgeW / 2, 213);
+    ctx.fillText(`❄ ${SIZES[i]}`, bx + badgeW / 2, 219);
   }
 
-  div(239);
+  div(245);
 
-  // ── Controls
-  sec('CONTROLS', 257);
+  sec('CONTROLS', 263);
   const ctrlRows: [string, string][] = IS_TOUCH ? [
     ['Swipe ← →',   'Move between warehouses'],
     ['Swipe ↓',     'Fast drop'],
     ['Tap WH',      'Instant drop to that warehouse'],
     ['2× tap block','Spin up new WH  (costs 25cr)'],
+    ['Tap anywhere','Activate YUKI POW (Stage 4 only)'],
   ] : [
     ['← →',         'Move between warehouses'],
     ['↓',           'Fast drop'],
     ['Click WH',    'Instant drop to that warehouse'],
     ['SPACE',       'Spin up new WH  (costs 25cr)'],
+    ['P',           'Activate YUKI POW (Stage 4 only)'],
   ];
   for (let i = 0; i < ctrlRows.length; i++) {
-    const y = 273 + i * 22;
+    const y = 279 + i * 22;
     ctx.fillStyle = '#38bdf8';
     ctx.font = 'bold 12px "Courier New", monospace';
     ctx.textAlign = 'left';
@@ -501,18 +832,18 @@ function drawTutorial(ctx: CanvasRenderingContext2D, playerName: string) {
     ctx.fillText(ctrlRows[i][1], 160, y);
   }
 
-  div(361);
+  div(393);
 
-  // ── Scoring
-  sec('SCORING', 379);
+  sec('SCORING', 411);
   const scoreRows: [string, string, string][] = [
     ['❄ Perfect match',          'Saved $45 · combo grows',    '#67e8f9'],
     ['⚠ Off by 1 size',          'Less savings · −18cr budget','#facc15'],
     ['✗ Wrong WH',               'No savings  · −40cr budget', '#f87171'],
     ['❌ WH full / budget out',  '−1 life  (3 lives total)',    '#f87171'],
+    ['⚡ 5× combo in Stage 3',   'Earns YUKI POW!',             '#a78bfa'],
   ];
   for (let i = 0; i < scoreRows.length; i++) {
-    const y = 395 + i * 22;
+    const y = 427 + i * 22;
     ctx.fillStyle = scoreRows[i][2];
     ctx.font = 'bold 12px "Courier New", monospace';
     ctx.textAlign = 'left';
@@ -522,15 +853,13 @@ function drawTutorial(ctx: CanvasRenderingContext2D, playerName: string) {
     ctx.fillText(scoreRows[i][1], 282, y);
   }
 
-  div(483);
+  div(537);
 
-  // Tip
   ctx.fillStyle = '#1e3a5f';
   ctx.font = '12px "Courier New", monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('Spin up a WH when it\'s full — that\'s what Yuki does automatically, 24/7.', cx, 505);
+  ctx.fillText('Spin up a WH when it\'s full — that\'s what Yuki does automatically, 24/7.', cx, 557);
 
-  // ── Pulsing CTA
   const pulse = 0.65 + 0.35 * Math.sin(Date.now() / 480);
   ctx.globalAlpha = pulse;
   ctx.fillStyle = '#67e8f9';
@@ -538,7 +867,7 @@ function drawTutorial(ctx: CanvasRenderingContext2D, playerName: string) {
   ctx.textAlign = 'center';
   ctx.shadowColor = '#67e8f9';
   ctx.shadowBlur = 14;
-  ctx.fillText(IS_TOUCH ? '▶  Tap anywhere to start' : '▶  Click or press any key to start', cx, 644);
+  ctx.fillText(IS_TOUCH ? '▶  Tap anywhere to start' : '▶  Click or press any key to start', cx, 620);
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
 }
@@ -551,11 +880,9 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
   lastParticleTime = now;
   updateParticles(dt);
 
-  // Deep ice background
   ctx.fillStyle = '#020c1a';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  // Subtle aurora gradient across top
   const aurora = ctx.createLinearGradient(0, 0, CANVAS_W, 0);
   aurora.addColorStop(0,   'rgba(103,232,249,0.04)');
   aurora.addColorStop(0.5, 'rgba(167,139,250,0.06)');
@@ -567,7 +894,6 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   if (state.status === 'tutorial') {
     drawTutorial(ctx, state.playerName);
-    // Scanlines
     ctx.fillStyle = 'rgba(0,0,0,0.025)';
     for (let y = 0; y < CANVAS_H; y += 4) ctx.fillRect(0, y, CANVAS_W, 2);
     return;
@@ -585,7 +911,6 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.save();
     ctx.translate(boardX, 10);
 
-    // Board background
     const boardGrad = ctx.createLinearGradient(0, 0, 0, BOARD_H);
     boardGrad.addColorStop(0, '#071220');
     boardGrad.addColorStop(1, '#040d18');
@@ -594,16 +919,19 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
     rrect(ctx, 0, 0, BOARD_W, BOARD_H, 10);
     ctx.fill();
 
-    // Frosted border
     ctx.strokeStyle = accent + '44';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     rrect(ctx, 0, 0, BOARD_W, BOARD_H, 10);
     ctx.stroke();
 
-    drawHeader(ctx, board, label, accent, state.level, state.nextQuery, isPenguin, state.spinupPending && !isPenguin, state.yuki.score, state.bestScore);
+    drawHeader(
+      ctx, board, label, accent, state.stage, state.nextQuery,
+      isPenguin, state.spinupPending && !isPenguin,
+      state.yuki.score, state.bestScore,
+      !isPenguin && state.hasYukiPow, !isPenguin && state.yukiPowUsed,
+    );
 
-    // Lane dividers — based on dynamic lane count
     const dynamicLaneW = BOARD_W / buildLaneList(board.warehouses, board.extraWarehouses).length;
     const totalLanes = buildLaneList(board.warehouses, board.extraWarehouses).length;
     ctx.strokeStyle = '#0a1a2e';
@@ -618,7 +946,6 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
     const fallProgress = (state.queryY - QUERY_START_Y) / (QUERY_LAND_Y - QUERY_START_Y);
     const showFullHint = !isPenguin && fallProgress > 0.55;
 
-    // Combo overlay (5+) — drawn behind block for atmosphere
     if (!isPenguin && board.combo >= 5) {
       const intensity = Math.min(1, (board.combo - 5) / 10);
       const pulse = 0.4 + 0.6 * Math.abs(Math.sin(Date.now() / 200));
@@ -637,11 +964,34 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
 
     drawWarehouses(ctx, lane, board.warehouses, board.extraWarehouses, showFullHint, !isPenguin);
 
-    if (state.currentQuery) {
-      drawFallingQuery(ctx, state.currentQuery, queryX, state.queryY, isPenguin, !isPenguin && state.spinupPending);
+    // Draw falling query — hidden during transitions and the whole AI rain event
+    const rainActive = state.aiRainPhase === 'warning' || state.aiRainPhase === 'raining';
+    const showQuery = isPenguin || (!state.stageTransition.active && !rainActive);
+    if (state.currentQuery && showQuery) {
+      drawFallingQuery(
+        ctx, state.currentQuery, queryX, state.queryY,
+        isPenguin,
+        !isPenguin && state.spinupPending,
+        !isPenguin && state.stage === 1,
+      );
     }
 
     drawFeedback(ctx, board);
+
+    // Stage 1 hint
+    if (!isPenguin && state.stage === 1 && !state.stageTransition.active) {
+      drawStage1Hint(ctx);
+    }
+
+    // AI rain overlay (player board only)
+    if (!isPenguin && state.aiRainPhase !== 'none') {
+      drawAiRainOverlay(ctx, state);
+    }
+
+    // Stage transition overlay (player board only)
+    if (!isPenguin && state.stageTransition.active) {
+      drawStageTransition(ctx, state.stageTransition, state.hasYukiPow);
+    }
 
     ctx.restore();
   };
@@ -650,7 +1000,6 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
     ? state.playerName.toUpperCase().slice(0, 14)
     : 'PLAYER';
 
-  // Screen shake
   const shk = state.shakeMagnitude;
   if (shk > 0) {
     ctx.save();
@@ -662,14 +1011,12 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   drawBoard(PLAYER_BX, state.player, playerLabel, PLAYER_ACCENT, state.playerX, state.playerLane, false);
 
-  // Red flash overlay on life loss
   if (shk > 0) {
     ctx.fillStyle = `rgba(239,68,68,${Math.min(0.22, shk * 0.019)})`;
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.restore();
   }
 
-  // Scanlines
   ctx.fillStyle = 'rgba(0,0,0,0.025)';
   for (let y = 0; y < CANVAS_H; y += 4) {
     ctx.fillRect(0, y, CANVAS_W, 2);

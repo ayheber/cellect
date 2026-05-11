@@ -46,7 +46,6 @@ export const MAX_QUEUE = 2;
 export const STARTING_CREDITS = 500;
 
 // Weighted query size distribution — small queries dominate (realistic workload)
-// so XS/S WHs back up fast and spinup is needed regularly
 export const WH_WEIGHTS: number[] = [0.35, 0.28, 0.20, 0.11, 0.06]; // XS S M L XL
 
 // Base processing time per WH size (seconds)
@@ -58,7 +57,7 @@ export const PROCESS_TIME: Record<WHSize, number> = {
   XL: 11.0,
 };
 
-// Processing slows +10% per level — queues fill faster as game speeds up
+// Processing slows +10% per stage
 export const PROCESS_LEVEL_INC = 0.10;
 
 export const CREDIT_COST = {
@@ -66,11 +65,9 @@ export const CREDIT_COST = {
   close: 18,
   poor: 40,
   spinup: 25,
-  overflow: 0, // no extra credit cost, just life
+  overflow: 0,
 };
 
-// Snowflake credit cost per query route (simplified: credits × $3/credit × 10min runtime)
-// XS=1cr, S=2cr, M=4cr, L=8cr, XL=16cr  → multiply by $1.5 for game dollars
 export const WH_QUERY_COST: Record<WHSize, number> = {
   XS: 15,
   S:  30,
@@ -79,10 +76,35 @@ export const WH_QUERY_COST: Record<WHSize, number> = {
   XL: 240,
 };
 
-// Baseline: what a human does without Yuki — routes everything to M
-export const BASELINE_COST = 60; // $60/query if you always pick M
+export const BASELINE_COST = 60;
+export const COMBO_BONUS = 0.4;
 
-export const COMBO_BONUS = 0.4; // each 3-combo adds 40% to savings multiplier
+// ── Stage system ──────────────────────────────────────────────────────────────
+
+export interface StageConfig {
+  stage: number;
+  name: string;
+  queries: number; // -1 = infinite (stage 5)
+  speed: number;
+  desc: string;
+}
+
+export const STAGES: StageConfig[] = [
+  { stage: 1, name: 'INTRO',     queries:  8, speed:  50, desc: 'Sizes shown on each query block' },
+  { stage: 2, name: 'WARM UP',   queries: 12, speed:  75, desc: 'Read the bar — no size hints' },
+  { stage: 3, name: 'CHALLENGE', queries: 16, speed: 100, desc: 'Hit a 5× combo to earn YUKI POW!' },
+  { stage: 4, name: 'AI RAIN',   queries: 12, speed: 128, desc: 'Survive the storm...' },
+  { stage: 5, name: 'EXPERT',    queries: -1, speed: 160, desc: 'Survive as long as you can' },
+];
+
+export const STAGE_SPEED_INC = 5;         // px/s added every 4 queries within a stage
+
+export const AI_RAIN_TRIGGER_QUERY = 6;   // AI rain fires after this many queries in stage 4
+export const AI_RAIN_WARNING_DURATION = 3.5;
+export const AI_RAIN_TIMEOUT = 12.0;      // seconds to activate YUKI POW
+export const AI_RAIN_NO_POW_TIMEOUT = 4.0; // doom timer when player has no YUKI POW
+export const YUKI_POW_COMBO_REQUIRED = 5;
+export const STAGE_TRANSITION_DURATION = 3.5;
 
 export const SQL_SNIPPETS: Record<WHSize, string[]> = {
   XS: [
