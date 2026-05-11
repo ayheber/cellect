@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { StartScreen } from './components/StartScreen';
 import { Game } from './components/Game';
 import { GameOver } from './components/GameOver';
-import { submitToHubSpot } from './hubspot';
-
 const requireRegistration = import.meta.env.VITE_REQUIRE_REGISTRATION === 'true';
 
 type Screen = 'start' | 'playing' | 'gameover';
@@ -16,8 +14,7 @@ export default function App() {
   const [yukiScore, setYukiScore] = useState(0);
   const [isNewBest, setIsNewBest] = useState(false);
 
-  const handleStart = (name: string, email: string) => {
-    submitToHubSpot(name, email);
+  const handleStart = (name: string) => {
     setPlayerName(name);
     setGameKey(k => k + 1);
     setScreen('playing');

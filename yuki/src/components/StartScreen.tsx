@@ -1,17 +1,29 @@
 import { useState, FormEvent } from 'react';
+import { submitToHubSpot } from '../hubspot';
 
 interface Props {
-  onStart: (name: string, email: string) => void;
+  onStart: (name: string) => void;
 }
 
 export function StartScreen({ onStart }: Props) {
-  const [name, setName] = useState('');
+  const [firstname, setFirstname] = useState('');
+  const [lastname, setLastname] = useState('');
   const [email, setEmail] = useState('');
+  const [jobtitle, setJobtitle] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (name.trim() && email.trim()) {
-      onStart(name.trim(), email.trim());
+    setError('');
+    setLoading(true);
+    try {
+      await submitToHubSpot(firstname.trim(), lastname.trim(), email.trim(), jobtitle.trim());
+      onStart(`${firstname.trim()} ${lastname.trim()}`);
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -25,12 +37,20 @@ export function StartScreen({ onStart }: Props) {
         <form onSubmit={handleSubmit} className="start-form">
           <input
             type="text"
-            placeholder="Your name"
-            value={name}
-            onChange={e => setName(e.target.value)}
+            placeholder="First name"
+            value={firstname}
+            onChange={e => setFirstname(e.target.value)}
             required
             className="start-input"
             autoFocus
+          />
+          <input
+            type="text"
+            placeholder="Last name"
+            value={lastname}
+            onChange={e => setLastname(e.target.value)}
+            required
+            className="start-input"
           />
           <input
             type="email"
@@ -40,8 +60,17 @@ export function StartScreen({ onStart }: Props) {
             required
             className="start-input"
           />
-          <button type="submit" className="start-btn">
-            Start →
+          <input
+            type="text"
+            placeholder="Job title"
+            value={jobtitle}
+            onChange={e => setJobtitle(e.target.value)}
+            required
+            className="start-input"
+          />
+          {error && <p className="start-error">{error}</p>}
+          <button type="submit" className="start-btn" disabled={loading}>
+            {loading ? 'Starting…' : 'Start →'}
           </button>
         </form>
       </div>

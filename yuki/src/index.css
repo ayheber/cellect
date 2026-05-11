@@ -224,6 +224,13 @@ body {
 
 .start-btn:hover { background: #a5f3fc; }
 .start-btn:active { transform: scale(0.98); }
+.start-btn:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+
+.start-error {
+  color: #f87171;
+  font-size: 13px;
+  text-align: center;
+}
 
 /* Game over extras */
 .gameover-card { gap: 16px; }
