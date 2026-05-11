@@ -45,12 +45,21 @@ jobs:
         working-directory: yuki
         run: npm ci
 
-      - name: Build (yuki)
+      - name: Build (yuki with registration)
         working-directory: yuki
         run: npm run build
+        env:
+          VITE_REQUIRE_REGISTRATION: 'true'
 
-      - name: Merge yuki into cellect dist
+      - name: Move yuki build to dist
         run: mv yuki/dist web/dist/yuki
+
+      - name: Build (yuki-dev without registration)
+        working-directory: yuki
+        run: npm run build:dev
+
+      - name: Move yuki-dev build to dist
+        run: mv yuki/dist web/dist/yuki-dev
 
       - uses: actions/upload-pages-artifact@v3
         with:
