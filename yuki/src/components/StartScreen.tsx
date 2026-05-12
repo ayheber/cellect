@@ -2,10 +2,11 @@ import { useState, FormEvent } from 'react';
 import { submitToHubSpot } from '../hubspot';
 
 interface Props {
-  onStart: (name: string) => void;
+  onStart: (name: string, email: string) => void;
+  onLeaderboard: () => void;
 }
 
-export function StartScreen({ onStart }: Props) {
+export function StartScreen({ onStart, onLeaderboard }: Props) {
   const [firstname, setFirstname] = useState('');
   const [lastname, setLastname] = useState('');
   const [email, setEmail] = useState('');
@@ -19,7 +20,7 @@ export function StartScreen({ onStart }: Props) {
     setLoading(true);
     try {
       await submitToHubSpot(firstname.trim(), lastname.trim(), email.trim(), jobtitle.trim());
-      onStart(`${firstname.trim()} ${lastname.trim()}`);
+      onStart(`${firstname.trim()} ${lastname.trim()}`, email.trim());
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {
@@ -73,6 +74,7 @@ export function StartScreen({ onStart }: Props) {
             {loading ? 'Starting…' : 'Start →'}
           </button>
         </form>
+        <button className="lb-link" onClick={onLeaderboard}>Leaderboard</button>
       </div>
     </div>
   );
